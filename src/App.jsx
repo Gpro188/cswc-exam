@@ -27,11 +27,14 @@ import {
   Settings, 
   FileText,
   School,
-  Loader
+  Loader,
+  Menu,
+  X
 } from 'lucide-react';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [institutions, setInstitutions] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [previousStudents, setPreviousStudents] = useState([]);
@@ -406,51 +409,59 @@ function App() {
     }
   };
 
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <div className="app-container">
       {/* Sidebar Navigation */}
-      <aside className="app-sidebar no-print">
+      <aside className={`app-sidebar no-print ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-logo">
           <div className="logo-icon">CS</div>
           <div className="logo-text">
             <h1>CSWC PANEL</h1>
             <p>Exam Center System</p>
           </div>
+          <button className="mobile-close-btn" onClick={() => setIsMobileMenuOpen(false)}>
+            <X size={20} />
+          </button>
         </div>
 
         <ul className="sidebar-menu">
           <li className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}>
-            <button onClick={() => setActiveTab('dashboard')}>
+            <button onClick={() => handleTabChange('dashboard')}>
               <LayoutDashboard size={18} /> Dashboard
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'allocation' ? 'active' : ''}`}>
-            <button onClick={() => setActiveTab('allocation')}>
+            <button onClick={() => handleTabChange('allocation')}>
               <MapPin size={18} /> Center Mapping
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'registrations' ? 'active' : ''}`}>
-            <button onClick={() => setActiveTab('registrations')}>
+            <button onClick={() => handleTabChange('registrations')}>
               <Users size={18} /> Registrations
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'timetable' ? 'active' : ''}`}>
-            <button onClick={() => setActiveTab('timetable')}>
+            <button onClick={() => handleTabChange('timetable')}>
               <Calendar size={18} /> Time Table
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'previous' ? 'active' : ''}`}>
-            <button onClick={() => setActiveTab('previous')}>
+            <button onClick={() => handleTabChange('previous')}>
               <CheckSquare size={18} /> Previous SAY
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'reports' ? 'active' : ''}`}>
-            <button onClick={() => setActiveTab('reports')}>
+            <button onClick={() => handleTabChange('reports')}>
               <Printer size={18} /> Reports & Print
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'import' ? 'active' : ''}`}>
-            <button onClick={() => setActiveTab('import')}>
+            <button onClick={() => handleTabChange('import')}>
               <Settings size={18} /> Settings & Import
             </button>
           </li>
@@ -468,9 +479,17 @@ function App() {
 
       {/* Main Content Pane */}
       <main className="app-content">
+        {isMobileMenuOpen && (
+          <div className="mobile-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>
+        )}
         <header className="content-header no-print">
           <div className="header-title">
-            <h2>{getViewTitle()}</h2>
+            <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+              <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)}>
+                <Menu size={24} />
+              </button>
+              <h2>{getViewTitle()}</h2>
+            </div>
             <p>{getViewSubtitle()}</p>
           </div>
         </header>
