@@ -3,6 +3,10 @@ import seedData from './data/seed_data.json';
 import './App.css';
 import { cleanSubjectName } from './utils/matching';
 
+// Firebase
+import { onSnapshot } from "firebase/firestore";
+import { collections, setDocument, deleteDocument, clearCollection, syncBatchToCollection } from "./services/db";
+
 // Components
 import Dashboard from './components/Dashboard';
 import CenterAllocation from './components/CenterAllocation';
@@ -22,7 +26,8 @@ import {
   Printer, 
   Settings, 
   FileText,
-  School
+  School,
+  Loader
 } from 'lucide-react';
 
 function App() {
@@ -31,45 +36,61 @@ function App() {
   const [registrations, setRegistrations] = useState([]);
   const [previousStudents, setPreviousStudents] = useState([]);
   const [timeTable, setTimeTable] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Load initial state from LocalStorage or seedData
+  // Load state from Firestore
   useEffect(() => {
-    const savedInstitutions = localStorage.getItem('cswc_institutions');
-    const savedRegistrations = localStorage.getItem('cswc_registrations');
-    const savedPreviousStudents = localStorage.getItem('cswc_previous_students');
-    const savedTimeTable = localStorage.getItem('cswc_timetable');
+    let loadedCount = 0;
+    const checkLoaded = () => {
+      loadedCount++;
+      if (loadedCount >= 4) setLoading(false);
+    };
 
-    if (savedInstitutions) {
-      setInstitutions(JSON.parse(savedInstitutions));
-    } else {
-      setInstitutions(seedData.institutions);
-      localStorage.setItem('cswc_institutions', JSON.stringify(seedData.institutions));
-    }
+    const unsubInstitutions = onSnapshot(collections.institutions, (snapshot) => {
+      setInstitutions(snapshot.docs.map(doc => ({...doc.data(), id: doc.id})));
+      checkLoaded();
+    });
+    const unsubRegistrations = onSnapshot(collections.registrations, (snapshot) => {
+      setRegistrations(snapshot.docs.map(doc => ({...doc.data(), id: doc.id})));
+      checkLoaded();
+    });
+    const unsubPreviousStudents = onSnapshot(collections.previousStudents, (snapshot) => {
+      setPreviousStudents(snapshot.docs.map(doc => ({...doc.data(), id: doc.id})));
+      checkLoaded();
+    });
+    const unsubTimeTable = onSnapshot(collections.timeTable, (snapshot) => {
+      setTimeTable(snapshot.docs.map(doc => ({...doc.data(), id: doc.id})));
+      checkLoaded();
+    });
 
-    if (savedRegistrations) {
-      setRegistrations(JSON.parse(savedRegistrations));
-    } else {
-      setRegistrations(seedData.registrations);
-      localStorage.setItem('cswc_registrations', JSON.stringify(seedData.registrations));
-    }
-
-    if (savedPreviousStudents) {
-      setPreviousStudents(JSON.parse(savedPreviousStudents));
-    } else {
-      setPreviousStudents(seedData.previous_say_students || []);
-      localStorage.setItem('cswc_previous_students', JSON.stringify(seedData.previous_say_students || []));
-    }
-
-    if (savedTimeTable) {
-      setTimeTable(JSON.parse(savedTimeTable));
-    } else {
-      setTimeTable([]);
-      localStorage.setItem('cswc_timetable', JSON.stringify([]));
-    }
+    return () => {
+      unsubInstitutions();
+      unsubRegistrations();
+      unsubPreviousStudents();
+      unsubTimeTable();
+    };
   }, []);
+
+  // Sync state helpers for mass operations
+  const updateInstitutions = async (data) => {
+    await syncBatchToCollection("institutions", data.map(d => ({...d, id: d.code})), "id");
+  };
+
+  const updateRegistrations = async (data) => {
+    await syncBatchToCollection("registrations", data.map(d => ({...d, id: d.id || `${d.uid}_${d.subject}`})), "id");
+  };
+
+  const updatePreviousStudents = async (data) => {
+    await syncBatchToCollection("previousStudents", data.map(d => ({...d, id: d.id || d.uid})), "id");
+  };
+
+  const updateTimeTable = async (data) => {
+    await syncBatchToCollection("timeTable", data.map((d, i) => ({...d, id: d.id || `slot_${i}`})), "id");
+  };
 
   // Auto-heal database: recreate missing placeholder institutions and clean subject names
   useEffect(() => {
+    if (loading) return; // Wait until Firebase has loaded
     if (institutions.length === 0 && registrations.length === 0) return;
 
     const existingCodes = new Set(institutions.map(i => i.code.toUpperCase()));
@@ -181,146 +202,106 @@ function App() {
       console.log('Auto-healing: Normalized subject names in timetable.');
       updateTimeTable(nextTimeTable);
     }
-  }, [institutions, registrations, previousStudents, timeTable]);
-
-  // Sync state to local storage when state changes
-  const updateInstitutions = (data) => {
-    setInstitutions(data);
-    localStorage.setItem('cswc_institutions', JSON.stringify(data));
-  };
-
-  const updateRegistrations = (data) => {
-    setRegistrations(data);
-    localStorage.setItem('cswc_registrations', JSON.stringify(data));
-  };
-
-  const updatePreviousStudents = (data) => {
-    setPreviousStudents(data);
-    localStorage.setItem('cswc_previous_students', JSON.stringify(data));
-  };
-
-  const updateTimeTable = (data) => {
-    setTimeTable(data);
-    localStorage.setItem('cswc_timetable', JSON.stringify(data));
-  };
+  }, [institutions, registrations, previousStudents, timeTable, loading]);
 
   // Manual Add/Delete Handlers
-  const handleAddInstitution = (newInst) => {
-    const updated = [...institutions, newInst];
-    updateInstitutions(updated);
+  const handleAddInstitution = async (newInst) => {
+    await setDocument("institutions", newInst.code, newInst);
   };
 
-  const handleEditInstitution = (updatedSchool) => {
-    // 1. Update institutions
-    const nextInsts = institutions.map(i => i.code === updatedSchool.code ? updatedSchool : i);
-    updateInstitutions(nextInsts);
+  const handleEditInstitution = async (updatedSchool) => {
+    await setDocument("institutions", updatedSchool.code, updatedSchool);
 
-    // 2. Sync registrations
-    const nextRegs = registrations.map(r => {
-      if (r.school_code === updatedSchool.code) {
-        return {
-          ...r,
-          school_name: updatedSchool.name,
-          district: updatedSchool.district,
-          zone: updatedSchool.zone
-        };
-      }
-      return r;
-    });
-    updateRegistrations(nextRegs);
+    // Sync registrations
+    const updatedRegs = registrations.filter(r => r.school_code === updatedSchool.code).map(r => ({
+      ...r,
+      school_name: updatedSchool.name,
+      district: updatedSchool.district,
+      zone: updatedSchool.zone
+    }));
+    if (updatedRegs.length > 0) await updateRegistrations(updatedRegs);
 
-    // 3. Sync previous students
-    const nextPrev = previousStudents.map(s => {
-      if (s.school_code === updatedSchool.code) {
-        return {
-          ...s,
-          college: updatedSchool.name,
-          zone: updatedSchool.zone
-        };
-      }
-      return s;
-    });
-    updatePreviousStudents(nextPrev);
+    // Sync previous students
+    const updatedPrev = previousStudents.filter(s => s.school_code === updatedSchool.code).map(s => ({
+      ...s,
+      college: updatedSchool.name,
+      zone: updatedSchool.zone
+    }));
+    if (updatedPrev.length > 0) await updatePreviousStudents(updatedPrev);
   };
 
-  const handleDeleteInstitution = (code) => {
+  const handleDeleteInstitution = async (code) => {
     if (window.confirm(`Are you sure you want to delete institution ${code}? All its students' registrations will be updated to UNKNOWN school.`)) {
-      // Delete the school
-      const updatedInsts = institutions.filter(inst => inst.code !== code);
-      updateInstitutions(updatedInsts);
+      await deleteDocument("institutions", code);
       
-      // Update registration mappings
-      const updatedRegs = registrations.map(reg => {
-        if (reg.school_code === code) {
-          return { ...reg, school_code: 'UNKNOWN', school_name: 'UNKNOWN', zone: 'UNASSIGNED' };
-        }
-        return reg;
-      });
-      updateRegistrations(updatedRegs);
+      const updatedRegs = registrations.filter(reg => reg.school_code === code).map(reg => ({
+        ...reg, school_code: 'UNKNOWN', school_name: 'UNKNOWN', zone: 'UNASSIGNED'
+      }));
+      if (updatedRegs.length > 0) await updateRegistrations(updatedRegs);
     }
   };
 
-  const handleAddRegistration = (newReg) => {
-    // Check if duplicate student-subject registration
+  const handleAddRegistration = async (newReg) => {
     const exists = registrations.some(r => r.uid === newReg.uid && r.subject === newReg.subject);
     if (exists) {
       alert(`Student with UID ${newReg.uid} is already registered for subject "${newReg.subject}".`);
       return false;
     }
-    const updated = [...registrations, newReg];
-    updateRegistrations(updated);
+    await setDocument("registrations", `${newReg.uid}_${newReg.subject}`, newReg);
     return true;
   };
 
-  const handleDeleteRegistration = (uid, subject) => {
+  const handleDeleteRegistration = async (uid, subject) => {
     if (window.confirm(`Are you sure you want to delete registration for student ${uid} in subject "${subject}"?`)) {
-      const updated = registrations.filter(r => !(r.uid === uid && r.subject === subject));
-      updateRegistrations(updated);
+      await deleteDocument("registrations", `${uid}_${subject}`);
     }
   };
 
-  const handleAddPreviousStudent = (newStudent) => {
+  const handleAddPreviousStudent = async (newStudent) => {
     const exists = previousStudents.some(s => s.uid === newStudent.uid);
     if (exists) {
       alert(`Student with UID ${newStudent.uid} already exists in previous SAY list.`);
       return false;
     }
-    const updated = [...previousStudents, newStudent];
-    updatePreviousStudents(updated);
+    await setDocument("previousStudents", newStudent.uid, newStudent);
     return true;
   };
 
-  const handleDeletePreviousStudent = (uid) => {
+  const handleDeletePreviousStudent = async (uid) => {
     if (window.confirm(`Are you sure you want to delete student ${uid} from previous SAY list?`)) {
-      const updated = previousStudents.filter(s => s.uid !== uid);
-      updatePreviousStudents(updated);
+      await deleteDocument("previousStudents", uid);
     }
   };
 
-  const handleResetData = () => {
-    setInstitutions(seedData.institutions);
-    setRegistrations(seedData.registrations);
-    setPreviousStudents([]);
-    setTimeTable([]);
-    localStorage.setItem('cswc_institutions', JSON.stringify(seedData.institutions));
-    localStorage.setItem('cswc_registrations', JSON.stringify(seedData.registrations));
-    localStorage.setItem('cswc_previous_students', JSON.stringify([]));
-    localStorage.setItem('cswc_timetable', JSON.stringify([]));
+  const handleResetData = async () => {
+    await clearCollection("institutions", institutions, "id");
+    await clearCollection("registrations", registrations, "id");
+    await clearCollection("previousStudents", previousStudents, "id");
+    await clearCollection("timeTable", timeTable, "id");
+    
+    await updateInstitutions(seedData.institutions);
+    await updateRegistrations(seedData.registrations);
   };
 
-  const handleClearAllData = () => {
-    setInstitutions([]);
-    setRegistrations([]);
-    setPreviousStudents([]);
-    setTimeTable([]);
-    localStorage.setItem('cswc_institutions', JSON.stringify([]));
-    localStorage.setItem('cswc_registrations', JSON.stringify([]));
-    localStorage.setItem('cswc_previous_students', JSON.stringify([]));
-    localStorage.setItem('cswc_timetable', JSON.stringify([]));
+  const handleClearAllData = async () => {
+    await clearCollection("institutions", institutions, "id");
+    await clearCollection("registrations", registrations, "id");
+    await clearCollection("previousStudents", previousStudents, "id");
+    await clearCollection("timeTable", timeTable, "id");
   };
 
   // Switch views
   const renderActiveView = () => {
+    if (loading) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', color: 'var(--text-muted)' }}>
+          <Loader size={48} className="spin" style={{ marginBottom: '16px', color: 'var(--primary)' }} />
+          <h3>Connecting to Firebase...</h3>
+          <p>Syncing live database data</p>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -475,8 +456,13 @@ function App() {
           </li>
         </ul>
 
-        <div className="sidebar-footer">
-          CSWC Examination Panel v1.0.0
+        <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <span>CSWC Examination Panel v2.0.0</span>
+          {loading ? (
+            <span style={{ fontSize: '11px', color: 'var(--warning)' }}>Connecting...</span>
+          ) : (
+            <span style={{ fontSize: '11px', color: 'var(--success)' }}>🟢 Live Database Connected</span>
+          )}
         </div>
       </aside>
 

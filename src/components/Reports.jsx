@@ -7,6 +7,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
   const [selectedCenter, setSelectedCenter] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
+  const [deskSlipsViewMode, setDeskSlipsViewMode] = useState('chart');
 
   const fnTime = localStorage.getItem('cswc_fn_time') || '09:30 AM - 12:30 PM';
   const anTime = localStorage.getItem('cswc_an_time') || '01:30 PM - 04:30 PM';
@@ -147,6 +148,124 @@ const Reports = ({ institutions, registrations, timeTable }) => {
     return result;
   }, [institutions]);
 
+  // 5. Centre Exam & Seating Summary
+  const centreExamSummaryData = useMemo(() => {
+    const result = [];
+    const centers = institutions.filter(i => i.isExamCenter);
+
+    centers.forEach(center => {
+      const centerSlots = [];
+      const sortedSlots = [...timeTable].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      sortedSlots.forEach(slot => {
+        const slotSubjectsData = [];
+        let slotTotal = 0;
+        const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
+
+        scheduledSubjects.forEach(subject => {
+          const count = registrations.filter(r => {
+            const regCenterCode = schoolToCenterCode[r.school_code];
+            return regCenterCode === center.code && cleanSubjectName(r.subject) === subject;
+          }).length;
+
+          if (count > 0) {
+            slotSubjectsData.push({ subject, count });
+            slotTotal += count;
+          }
+        });
+
+        centerSlots.push({
+          slotId: slot.id,
+          date: slot.date,
+          session: slot.session,
+          time: slot.time || (slot.session.includes('FN') ? fnTime : anTime),
+          subjects: slotSubjectsData,
+          totalCount: slotTotal
+        });
+      });
+
+      result.push({
+        centerCode: center.code,
+        centerName: center.name,
+        place: center.place,
+        slots: centerSlots
+      });
+    });
+
+    return result;
+  }, [institutions, registrations, timeTable, schoolToCenterCode, fnTime, anTime]);
+
+  // 6. Seating Candidates list (flat)
+  const seatingCandidates = useMemo(() => {
+    if (!selectedSlotId || !selectedCenter) return [];
+
+    const slotsToProcess = selectedSlotId === 'all' 
+      ? timeTable 
+      : timeTable.filter(s => s.id === selectedSlotId);
+
+    const centersToProcess = selectedCenter === 'all'
+      ? examCenters.map(ec => ec.code)
+      : [selectedCenter];
+
+    const result = [];
+
+    centersToProcess.forEach(centerCode => {
+      slotsToProcess.forEach(slot => {
+        const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
+
+        const matchingRegs = registrations.filter(r => {
+          const regCenterCode = schoolToCenterCode[r.school_code];
+          return regCenterCode === centerCode && scheduledSubjects.includes(cleanSubjectName(r.subject));
+        });
+
+        const sortedRegs = [...matchingRegs].sort((a, b) => {
+          const nameCompare = a.name.localeCompare(b.name);
+          if (nameCompare !== 0) return nameCompare;
+          return a.subject.localeCompare(b.subject);
+        });
+
+        sortedRegs.forEach((reg, idx) => {
+          result.push({
+            ...reg,
+            seatNo: idx + 1,
+            slotId: slot.id,
+            slotDate: slot.date,
+            slotSession: slot.session,
+            slotTime: slot.time || (slot.session.includes('FN') ? fnTime : anTime),
+            centerCode
+          });
+        });
+      });
+    });
+
+    return result;
+  }, [registrations, timeTable, selectedSlotId, selectedCenter, schoolToCenterCode, examCenters, fnTime, anTime]);
+
+  // 7. Grouped Seating Candidates by Center & Slot
+  const groupedSeatingData = useMemo(() => {
+    const groups = {};
+
+    seatingCandidates.forEach(cand => {
+      const key = `${cand.centerCode}_${cand.slotId}`;
+      if (!groups[key]) {
+        const centerObj = institutions.find(i => i.code === cand.centerCode);
+        groups[key] = {
+          centerCode: cand.centerCode,
+          centerName: centerObj?.name || cand.centerCode,
+          centerPlace: centerObj?.place || '',
+          slotId: cand.slotId,
+          slotDate: cand.slotDate,
+          slotSession: cand.slotSession,
+          slotTime: cand.slotTime,
+          candidates: []
+        };
+      }
+      groups[key].candidates.push(cand);
+    });
+
+    return Object.values(groups);
+  }, [seatingCandidates, institutions]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -163,17 +282,28 @@ const Reports = ({ institutions, registrations, timeTable }) => {
           <select 
             className="form-select"
             value={reportType}
-            onChange={(e) => setReportType(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setReportType(val);
+              if (val === 'centre_exam_summary' || val === 'desk_slips') {
+                setSelectedCenter('all');
+              }
+              if (val === 'desk_slips') {
+                setSelectedSlotId('all');
+              }
+            }}
           >
             <option value="office_summary">Office Summary (Total Question Paper Print Counts)</option>
             <option value="center_packing">Center Packing Counts (Envelop Packing Sheet)</option>
+            <option value="centre_exam_summary">Centre Exam Schedule & Seating Summary</option>
             <option value="attendance_register">Center Attendance Register (Subject-wise by Class)</option>
+            <option value="desk_slips">Desk Slips & Seating Arrangement Chart</option>
             <option value="center_list">Center Allocation List (For Publication to Principals)</option>
             <option value="institution_enrollment">Institution Enrollment Summary (For Center Planning)</option>
           </select>
         </div>
 
-        {reportType === 'center_packing' && (
+        {(reportType === 'center_packing' || reportType === 'centre_exam_summary') && (
           <div className="form-group">
             <label>Exam Center Filter</label>
             <select
@@ -187,6 +317,62 @@ const Reports = ({ institutions, registrations, timeTable }) => {
               ))}
             </select>
           </div>
+        )}
+
+        {reportType === 'desk_slips' && (
+          <>
+            <div className="form-group">
+              <label>Select Exam Center</label>
+              <select
+                className="form-select"
+                value={selectedCenter}
+                onChange={(e) => setSelectedCenter(e.target.value)}
+              >
+                <option value="all">All Exam Centers (Sequential list)</option>
+                {examCenters.map(ec => (
+                  <option key={ec.code} value={ec.code}>{ec.code} - {ec.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Select Exam Slot</label>
+              <select
+                className="form-select"
+                value={selectedSlotId}
+                onChange={(e) => setSelectedSlotId(e.target.value)}
+              >
+                <option value="all">All Exam Slots (Sequential list)</option>
+                {timeTable.map(slot => (
+                  <option key={slot.id} value={slot.id}>
+                    {new Date(slot.date).toLocaleDateString()} ({slot.session})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>View Mode</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  type="button"
+                  className={`btn ${deskSlipsViewMode === 'chart' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setDeskSlipsViewMode('chart')}
+                  style={{ padding: '8px 12px', fontSize: '13px', whiteSpace: 'nowrap', height: '42px' }}
+                >
+                  Seating Chart
+                </button>
+                <button 
+                  type="button"
+                  className={`btn ${deskSlipsViewMode === 'slips' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setDeskSlipsViewMode('slips')}
+                  style={{ padding: '8px 12px', fontSize: '13px', whiteSpace: 'nowrap', height: '42px' }}
+                >
+                  Desk Slips (8/Page)
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         {reportType === 'attendance_register' && (
@@ -399,6 +585,100 @@ const Reports = ({ institutions, registrations, timeTable }) => {
                 );
               })()
             )}
+          </div>
+        )}
+
+        {/* CENTRE EXAM SCHEDULE & SEATING SUMMARY */}
+        {reportType === 'centre_exam_summary' && (
+          <div>
+            <div className="print-report-header">
+              <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+              <h3>SAY & Improvement Examinations</h3>
+              <p>Centre Exam Schedule & Seating Summary</p>
+            </div>
+
+            <div className="print-meta-grid">
+              <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+              <div className="meta-item">Total Exam Centers: <strong>{examCenters.length}</strong></div>
+              <div className="meta-item">Timetable Slots: <strong>{timeTable.length}</strong></div>
+              <div className="meta-item">Total Paper Registrations: <strong>{registrations.length}</strong></div>
+            </div>
+
+            {centreExamSummaryData
+              .filter(center => selectedCenter === 'all' || center.centerCode === selectedCenter)
+              .map(center => {
+                const totalCandidatesForCenter = center.slots.reduce((sum, s) => sum + s.totalCount, 0);
+                
+                return (
+                  <div key={center.centerCode} className="page-break-after" style={{ marginBottom: '40px' }}>
+                    <h4 style={{ 
+                      backgroundColor: 'var(--primary-light)', 
+                      color: 'var(--primary)', 
+                      padding: '10px 16px', 
+                      borderRadius: 'var(--radius-sm)', 
+                      marginBottom: '12px',
+                      borderLeft: '4px solid var(--primary)',
+                      fontSize: '16px',
+                      fontWeight: '800',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span>CENTER: [{center.centerCode}] {center.centerName}, {center.place}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                        Total Seat Allocations: {totalCandidatesForCenter}
+                      </span>
+                    </h4>
+
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '150px', textAlign: 'center' }}>Date & Session</th>
+                          <th style={{ width: '180px', textAlign: 'center' }}>Time Slot</th>
+                          <th style={{ textAlign: 'left' }}>Subject-wise Allocation Breakdown</th>
+                          <th style={{ width: '140px', textAlign: 'center' }}>Total Attending</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {center.slots.map(slot => (
+                          <tr key={slot.slotId}>
+                            <td style={{ textAlign: 'center', fontWeight: '600' }}>
+                              <div>{new Date(slot.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{slot.session}</div>
+                            </td>
+                            <td style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
+                              {slot.time}
+                            </td>
+                            <td style={{ textAlign: 'left' }}>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {slot.subjects.map(sub => (
+                                  <span key={sub.subject} className="badge badge-neutral" style={{ fontSize: '11px', padding: '4px 8px' }}>
+                                    {sub.subject}: <strong>{sub.count}</strong>
+                                  </span>
+                                ))}
+                                {slot.subjects.length === 0 && (
+                                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '12px' }}>
+                                    No exams scheduled / no students assigned
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '15px', color: slot.totalCount > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
+                              {slot.totalCount}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+
+            <div className="print-signatures">
+              <div className="sig-block">Prepared By</div>
+              <div className="sig-block">Checked By</div>
+              <div className="sig-block">Controller of Examinations</div>
+            </div>
           </div>
         )}
 
@@ -725,6 +1005,172 @@ const Reports = ({ institutions, registrations, timeTable }) => {
               <div className="sig-block">Checked By</div>
               <div className="sig-block">Controller of Examinations</div>
             </div>
+          </div>
+        )}
+
+        {/* DESK SLIPS & SEATING CHART */}
+        {reportType === 'desk_slips' && (
+          <div>
+            {groupedSeatingData.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+                <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>No candidates found for the selected Exam Center and Slot.</h4>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Verify that the slot contains scheduled subjects and the center has assigned schools with registrations.</p>
+              </div>
+            ) : (
+              groupedSeatingData.map((group, gIdx) => {
+                const totalCand = group.candidates.length;
+                const isLast = gIdx === groupedSeatingData.length - 1;
+
+                if (deskSlipsViewMode === 'chart') {
+                  // RENDER SEATING CHART LIST
+                  return (
+                    <div key={`${group.centerCode}_${group.slotId}`} className={isLast ? '' : 'page-break-after'} style={{ marginBottom: '40px' }}>
+                      <div className="print-report-header">
+                        <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                        <h3>SAY & Improvement Examinations</h3>
+                        <p>Exam Seating Arrangement Chart</p>
+                      </div>
+
+                      <div className="print-meta-grid">
+                        <div className="meta-item">Exam Center: <strong>[{group.centerCode}] {group.centerName}</strong></div>
+                        <div className="meta-item">Place: <strong>{group.centerPlace}</strong></div>
+                        <div className="meta-item">Exam Date: <strong>{new Date(group.slotDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></div>
+                        <div className="meta-item">Session: <strong>{group.slotSession} ({group.slotTime})</strong></div>
+                        <div className="meta-item">Total Candidates: <strong>{totalCand}</strong></div>
+                        <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                      </div>
+
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '80px', textAlign: 'center' }}>SEAT NO</th>
+                            <th style={{ width: '120px', textAlign: 'center' }}>STUDENT UID</th>
+                            <th style={{ textAlign: 'left' }}>STUDENT NAME</th>
+                            <th style={{ width: '80px', textAlign: 'center' }}>CLASS</th>
+                            <th style={{ textAlign: 'left' }}>SUBJECT</th>
+                            <th style={{ textAlign: 'left' }}>COLLEGE NAME</th>
+                            <th style={{ width: '140px', textAlign: 'center' }}>SIGNATURE</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.candidates.map((cand) => (
+                            <tr key={cand.id}>
+                              <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '15px' }}>
+                                {String(cand.seatNo).padStart(2, '0')}
+                              </td>
+                              <td style={{ textAlign: 'center' }}><code>{cand.uid}</code></td>
+                              <td style={{ fontWeight: '700', textAlign: 'left' }}>{cand.name}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span className="badge badge-neutral" style={{ fontSize: '10px' }}>
+                                  {cand.class}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'left', fontWeight: '600' }}>{cand.subject}</td>
+                              <td style={{ textAlign: 'left', fontSize: '12px' }}>{cand.school_name}</td>
+                              <td style={{ height: '35px' }}></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      <div className="print-signatures" style={{ marginTop: '60px' }}>
+                        <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Invigilator Name & Sig.</div>
+                        <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Chief Superintendent (Seal & Sig.)</div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // RENDER PRINTABLE DESK SLIPS (8 PER PAGE)
+                  const chunks = [];
+                  for (let i = 0; i < group.candidates.length; i += 8) {
+                    chunks.push(group.candidates.slice(i, i + 8));
+                  }
+
+                  return (
+                    <div key={`${group.centerCode}_${group.slotId}`}>
+                      {chunks.map((chunk, cIdx) => {
+                        const isLastChunk = cIdx === chunks.length - 1;
+                        const pageIsLast = isLast && isLastChunk;
+                        return (
+                          <div 
+                            key={cIdx} 
+                            className={`desk-slips-page ${pageIsLast ? '' : 'page-break-after'}`}
+                            style={{ 
+                              display: 'grid', 
+                              gridTemplateColumns: '1fr 1fr', 
+                              gridTemplateRows: 'repeat(4, 1fr)', 
+                              gap: '12px',
+                              boxSizing: 'border-box',
+                              marginBottom: '20px'
+                            }}
+                          >
+                            {chunk.map((cand) => (
+                              <div key={cand.id} className="desk-slip-card">
+                                <div className="desk-slip-header">
+                                  <div className="desk-slip-logo">CSWC</div>
+                                  <div className="desk-slip-title">SAY/IMP EXAM 2026</div>
+                                </div>
+                                <div className="desk-slip-body">
+                                  <div className="desk-slip-row">
+                                    <span className="desk-slip-label">Center:</span>
+                                    <span className="desk-slip-value" style={{ fontWeight: '800', textTransform: 'uppercase' }}>
+                                      [{group.centerCode}] {group.centerName.substring(0, 30)}{group.centerName.length > 30 ? '...' : ''}
+                                    </span>
+                                  </div>
+                                  
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0' }}>
+                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                      <span className="desk-slip-label">Seat No:</span>
+                                      <span className="desk-slip-seat-no">
+                                        {String(cand.seatNo).padStart(2, '0')}
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                      <span className="desk-slip-label">Class:</span>
+                                      <span className="desk-slip-class">{cand.class}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="desk-slip-row">
+                                    <span className="desk-slip-label">Candidate Name:</span>
+                                    <span className="desk-slip-name">{cand.name}</span>
+                                  </div>
+                                  
+                                  <div className="desk-slip-row">
+                                    <span className="desk-slip-label">UID:</span>
+                                    <span className="desk-slip-uid">{cand.uid}</span>
+                                  </div>
+
+                                  <div className="desk-slip-row">
+                                    <span className="desk-slip-label">Subject:</span>
+                                    <span className="desk-slip-subject">{cand.subject}</span>
+                                  </div>
+
+                                  <div className="desk-slip-row-split">
+                                    <div>
+                                      <span className="desk-slip-label">Date:</span>
+                                      <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                        {new Date(group.slotDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="desk-slip-label">Session:</span>
+                                      <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                        {group.slotSession.includes('FN') ? 'FN' : 'AN'} ({group.slotTime})
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+              })
+            )}
           </div>
         )}
 
