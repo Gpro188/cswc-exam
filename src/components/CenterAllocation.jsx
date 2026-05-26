@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, ShieldAlert, Award, ArrowRight, UserCheck, Trash2, Zap, Plus, X, Edit2 } from 'lucide-react';
 
-const CenterAllocation = ({ institutions, registrations, onUpdateInstitutions, onDeleteInstitution, onAddInstitution, onEditInstitution }) => {
+const CenterAllocation = ({ institutions, registrations, previousStudents = [], onUpdateInstitutions, onDeleteInstitution, onAddInstitution, onEditInstitution }) => {
   const [selectedZone, setSelectedZone] = useState(institutions[0]?.zone || '');
   const [activeCenterCode, setActiveCenterCode] = useState('');
 
@@ -120,7 +120,9 @@ const CenterAllocation = ({ institutions, registrations, onUpdateInstitutions, o
 
   // Count candidates for a school
   const getSchoolStudentCount = (schoolCode) => {
-    return new Set(registrations.filter(r => r.school_code === schoolCode).map(r => r.uid)).size;
+    const regularIds = registrations.filter(r => r.school_code === schoolCode).map(r => r.uid);
+    const prevIds = previousStudents.filter(r => r.school_code === schoolCode).map(r => r.uid);
+    return new Set([...regularIds, ...prevIds]).size;
   };
 
   // Toggle Exam Center status
@@ -194,22 +196,38 @@ const CenterAllocation = ({ institutions, registrations, onUpdateInstitutions, o
     const schoolCodes = assignedSchools.map(s => s.code);
     
     // Unique student IDs
-    const studentIds = new Set(
-      registrations.filter(r => schoolCodes.includes(r.school_code)).map(r => r.uid)
-    );
+    const studentIds = new Set([
+      ...registrations.filter(r => schoolCodes.includes(r.school_code)).map(r => r.uid),
+      ...previousStudents.filter(r => schoolCodes.includes(r.school_code)).map(r => r.uid)
+    ]);
     
-    // Subject papers count
-    const totalPapers = registrations.filter(r => schoolCodes.includes(r.school_code)).length;
+    // Subject papers count (regular + previous say)
+    const regularPapers = registrations.filter(r => schoolCodes.includes(r.school_code)).length;
+    let prevPapers = 0;
+    previousStudents.filter(r => schoolCodes.includes(r.school_code)).forEach(r => {
+      prevPapers += (r.subjects ? r.subjects.length : 1);
+    });
+    const totalPapers = regularPapers + prevPapers;
 
     // Unique student breakdown by class
     const classCandidates = {};
+    const addCandidate = (cls, uid) => {
+      const clsKey = cls || 'UNKNOWN';
+      if (!classCandidates[clsKey]) {
+        classCandidates[clsKey] = new Set();
+      }
+      classCandidates[clsKey].add(uid);
+    };
+
     registrations.forEach(r => {
       if (schoolCodes.includes(r.school_code)) {
-        const cls = r.class || 'UNKNOWN';
-        if (!classCandidates[cls]) {
-          classCandidates[cls] = new Set();
-        }
-        classCandidates[cls].add(r.uid);
+        addCandidate(r.class, r.uid);
+      }
+    });
+
+    previousStudents.forEach(r => {
+      if (schoolCodes.includes(r.school_code)) {
+        addCandidate(r.class, r.uid);
       }
     });
 

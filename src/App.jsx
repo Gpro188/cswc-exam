@@ -336,6 +336,7 @@ function App() {
           <CenterAllocation 
             institutions={institutions} 
             registrations={registrations} 
+            previousStudents={previousStudents}
             onUpdateInstitutions={updateInstitutions} 
             onDeleteInstitution={handleDeleteInstitution}
             onAddInstitution={handleAddInstitution}
