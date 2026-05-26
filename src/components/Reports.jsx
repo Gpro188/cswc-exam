@@ -300,6 +300,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
             <option value="desk_slips">Desk Slips & Seating Arrangement Chart</option>
             <option value="center_list">Center Allocation List (For Publication to Principals)</option>
             <option value="institution_enrollment">Institution Enrollment Summary (For Center Planning)</option>
+            <option value="supervisor_list">Supervisor by Center List (For Exam Control)</option>
           </select>
         </div>
 
@@ -416,7 +417,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
         
         {/* OFFICE SUMMARY REPORT */}
         {reportType === 'office_summary' && (
-          <div>
+          <div className="theme-office">
             <div className="print-report-header">
               <h2>Council of Samastha Womens Colleges (CSWC)</h2>
               <h3>SAY & Improvement Examinations</h3>
@@ -477,7 +478,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
                 const totalPapers = subEntries.reduce((sum, [_, v]) => sum + v, 0);
                 
                 return (
-                  <div key={cCode} className="page-break-after" style={{ marginBottom: '40px' }}>
+                  <div key={cCode} className="theme-packing page-break-after" style={{ marginBottom: '40px' }}>
                     <div className="print-report-header">
                       <h2>Council of Samastha Womens Colleges (CSWC)</h2>
                       <h3>Question Paper Packing Sheet</h3>
@@ -535,7 +536,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
                 const totalPapers = subEntries.reduce((sum, [_, v]) => sum + v, 0);
 
                 return (
-                  <div>
+                  <div className="theme-packing">
                     <div className="print-report-header">
                       <h2>Council of Samastha Womens Colleges (CSWC)</h2>
                       <h3>Question Paper Packing Sheet</h3>
@@ -590,7 +591,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
 
         {/* CENTRE EXAM SCHEDULE & SEATING SUMMARY */}
         {reportType === 'centre_exam_summary' && (
-          <div>
+          <div className="theme-schedule">
             <div className="print-report-header">
               <h2>Council of Samastha Womens Colleges (CSWC)</h2>
               <h3>SAY & Improvement Examinations</h3>
@@ -684,7 +685,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
 
         {/* ATTENDANCE REGISTER */}
         {reportType === 'attendance_register' && (
-          <div>
+          <div className="theme-attendance">
             {(() => {
               const centerObj = institutions.find(i => i.code === selectedCenter);
               
@@ -782,7 +783,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
 
         {/* CENTER ALLOCATION LIST */}
         {reportType === 'center_list' && (
-          <div>
+          <div className="theme-allocation">
             <div className="print-report-header">
               <h2>Council of Samastha Womens Colleges (CSWC)</h2>
               <h3>SAY & Improvement Examinations</h3>
@@ -893,7 +894,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
 
         {/* INSTITUTION ENROLLMENT SUMMARY */}
         {reportType === 'institution_enrollment' && (
-          <div>
+          <div className="theme-enrollment">
             <div className="print-report-header">
               <h2>Council of Samastha Womens Colleges (CSWC)</h2>
               <h3>SAY & Improvement Examinations</h3>
@@ -999,6 +1000,63 @@ const Reports = ({ institutions, registrations, timeTable }) => {
                 </div>
               );
             })}
+
+            <div className="print-signatures" style={{ marginTop: '50px' }}>
+              <div className="sig-block">Prepared By</div>
+              <div className="sig-block">Checked By</div>
+              <div className="sig-block">Controller of Examinations</div>
+            </div>
+          </div>
+        )}
+
+        {/* SUPERVISOR LIST */}
+        {reportType === 'supervisor_list' && (
+          <div className="theme-supervisor">
+            <div className="print-report-header">
+              <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+              <h3>SAY & Improvement Examinations</h3>
+              <p>Supervisor by Center List (For Exam Control)</p>
+            </div>
+
+            <div className="print-meta-grid">
+              <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+              <div className="meta-item">Total Exam Centers: <strong>{examCenters.length}</strong></div>
+            </div>
+
+            <table className="data-table" style={{ marginTop: '20px' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
+                  <th style={{ width: '80px' }}>CODE</th>
+                  <th style={{ textAlign: 'left' }}>CENTER NAME & PLACE</th>
+                  <th style={{ textAlign: 'left' }}>SUPERVISOR NAME</th>
+                  <th style={{ textAlign: 'left' }}>SUPERVISOR PLACE</th>
+                  <th style={{ textAlign: 'left' }}>SUPERVISOR NUMBER</th>
+                </tr>
+              </thead>
+              <tbody>
+                {examCenters.map((center, idx) => (
+                  <tr key={center.code}>
+                    <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                    <td style={{ fontWeight: '600' }}><code>{center.code}</code></td>
+                    <td style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: '700' }}>{center.name}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{center.place} | {center.district}</div>
+                    </td>
+                    <td style={{ textAlign: 'left', fontWeight: '600' }}>{center.supervisor_name || '-'}</td>
+                    <td style={{ textAlign: 'left' }}>{center.supervisor_place || '-'}</td>
+                    <td style={{ textAlign: 'left' }}>{center.supervisor_phone || '-'}</td>
+                  </tr>
+                ))}
+                {examCenters.length === 0 && (
+                  <tr>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '24px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                      No exam centers designated yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
 
             <div className="print-signatures" style={{ marginTop: '50px' }}>
               <div className="sig-block">Prepared By</div>

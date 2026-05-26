@@ -134,7 +134,7 @@ const DataImport = ({ onResetData, onClearAllData, onUpdateInstitutions, onUpdat
       // Convert rows to registration structures with case-insensitive header matching and index fallback
       const newPlaceholderSchools = [];
 
-      const formattedRegs = parsedData.map(row => {
+      const formattedRegs = parsedData.flatMap(row => {
         const getField = (possibleHeaders, colIndex) => {
           // 1. Try finding by matching possible headers case-insensitively
           const headerKey = Object.keys(row).find(k => 
@@ -148,15 +148,17 @@ const DataImport = ({ onResetData, onClearAllData, onUpdateInstitutions, onUpdat
           return row[indexKey] !== undefined ? String(row[indexKey]).trim() : '';
         };
 
-        const schoolName = getField(['Institution', 'InstitutionName', 'College', 'CollegeName', 'School', 'SchoolName'], 0);
-        const district = getField(['District', 'ManagementDistrict'], 1);
-        const uid = getField(['Student UID', 'StudentUID', 'UID', 'StudentId', 'ID'], 2);
-        const name = getField(['Student Name', 'StudentName', 'Name', 'CandidateName'], 3);
-        const klass = getField(['Class', 'Klass', 'Year', 'Grade'], 4);
-        const subject = cleanSubjectName(getField(['Subject', 'SubjectName', 'Subjects', 'Exam'], 5));
-        const payment = getField(['Payment'], 6) || 'PAID';
+        const schoolName = getField(['Institution', 'InstitutionName', 'College', 'CollegeName', 'School', 'SchoolName'], 1);
+        const district = getField(['District', 'ManagementDistrict'], 2);
+        const uid = getField(['Student UID', 'StudentUID', 'UID', 'StudentId', 'ID'], 3);
+        const name = getField(['Student Name', 'StudentName', 'Name', 'CandidateName'], 4);
+        const klass = getField(['Class', 'Klass', 'Year', 'Grade'], 5);
+        const rawSubjects = getField(['Subject', 'SubjectName', 'Subjects', 'Exam'], 6);
+        const payment = getField(['Payment'], 7) || 'PAID';
 
-        if (!uid || !subject) return null;
+        if (!uid || !rawSubjects) return [];
+
+        const subjectsList = rawSubjects.split(/[,،]/).map(s => s.trim()).filter(Boolean);
 
         // Try matching in loaded institutions or newly created placeholders in this batch
         const combinedSchoolsList = [...institutions, ...newPlaceholderSchools];
@@ -178,19 +180,19 @@ const DataImport = ({ onResetData, onClearAllData, onUpdateInstitutions, onUpdat
           newPlaceholderSchools.push(matchedInst);
         }
 
-        return {
+        return subjectsList.map(subj => ({
           uid,
           name,
           class: klass,
-          subject,
+          subject: cleanSubjectName(subj),
           school_code: matchedInst ? matchedInst.code : 'UNKNOWN',
           school_name: matchedInst ? matchedInst.name : schoolName,
           district: matchedInst ? matchedInst.district : district,
           zone: matchedInst ? matchedInst.zone : 'UNASSIGNED',
           payment,
           source: 'MANUAL_IMPORT'
-        };
-      }).filter(Boolean);
+        }));
+      });
 
       if (formattedRegs.length === 0) {
         throw new Error("Could not find 'Student UID' and 'Subject' columns in sheet.");

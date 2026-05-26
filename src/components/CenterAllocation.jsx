@@ -20,6 +20,12 @@ const CenterAllocation = ({ institutions, registrations, onUpdateInstitutions, o
   const [editDistrict, setEditDistrict] = useState('');
   const [editZone, setEditZone] = useState('');
 
+  // States for supervisor editing
+  const [editingSupervisorCode, setEditingSupervisorCode] = useState('');
+  const [supName, setSupName] = useState('');
+  const [supPlace, setSupPlace] = useState('');
+  const [supPhone, setSupPhone] = useState('');
+
   const startEditing = (school) => {
     setEditingSchoolCode(school.code);
     setEditName(school.name);
@@ -46,6 +52,23 @@ const CenterAllocation = ({ institutions, registrations, onUpdateInstitutions, o
     };
     onEditInstitution(updatedSchool);
     setEditingSchoolCode('');
+  };
+
+  const startEditingSupervisor = (center) => {
+    setEditingSupervisorCode(center.code);
+    setSupName(center.supervisor_name || '');
+    setSupPlace(center.supervisor_place || '');
+    setSupPhone(center.supervisor_phone || '');
+  };
+
+  const saveSupervisor = (center) => {
+    onEditInstitution({
+      ...center,
+      supervisor_name: supName.trim(),
+      supervisor_place: supPlace.trim(),
+      supervisor_phone: supPhone.trim()
+    });
+    setEditingSupervisorCode('');
   };
 
   // Get zones
@@ -510,6 +533,38 @@ const CenterAllocation = ({ institutions, registrations, onUpdateInstitutions, o
                     <div>Assigned Schools: <strong>{stats.schoolsCount}</strong></div>
                     <div>Candidates: <strong>{stats.candidatesCount}</strong></div>
                     <div>Total Papers: <strong>{stats.papersCount}</strong></div>
+                  </div>
+
+                  {/* Supervisor Details */}
+                  <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-app)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '12px' }}>SUPERVISOR DETAILS</div>
+                      {editingSupervisorCode !== center.code && (
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={(e) => { e.stopPropagation(); startEditingSupervisor(center); }}>
+                          <Edit2 size={12} style={{ marginRight: '4px' }} /> Edit
+                        </button>
+                      )}
+                    </div>
+                    
+                    {editingSupervisorCode === center.code ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Name" value={supName} onChange={e => setSupName(e.target.value)} />
+                          <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Place" value={supPlace} onChange={e => setSupPlace(e.target.value)} />
+                          <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Phone/Number" value={supPhone} onChange={e => setSupPhone(e.target.value)} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button className="btn btn-secondary btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => setEditingSupervisorCode('')}>Cancel</button>
+                          <button className="btn btn-success btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => saveSupervisor(center)}>Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '13px', display: 'flex', gap: '16px' }}>
+                        <div>Name: <strong>{center.supervisor_name || 'Not Set'}</strong></div>
+                        <div>Place: <strong>{center.supervisor_place || 'Not Set'}</strong></div>
+                        <div>Number: <strong>{center.supervisor_phone || 'Not Set'}</strong></div>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px', backgroundColor: 'var(--primary-light)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', fontSize: '12px' }}>

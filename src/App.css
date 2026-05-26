@@ -462,6 +462,29 @@ button, input, select, textarea {
   background-color: var(--primary-light);
 }
 
+/* Theme variations for different reports */
+.theme-office .print-report-header h2 { color: #1e40af; }
+.theme-office .data-table th { background-color: #dbeafe; color: #1e40af; border-bottom: 2px solid #60a5fa; }
+.theme-office .data-table tbody tr:hover td { background-color: #f0fdf4; }
+
+.theme-packing .print-report-header h2 { color: #b45309; }
+.theme-packing .data-table th { background-color: #fef3c7; color: #b45309; border-bottom: 2px solid #fbbf24; }
+
+.theme-schedule .print-report-header h2 { color: #6b21a8; }
+.theme-schedule .data-table th { background-color: #f3e8ff; color: #6b21a8; border-bottom: 2px solid #c084fc; }
+
+.theme-attendance .print-report-header h2 { color: #166534; }
+.theme-attendance .data-table th { background-color: #dcfce7; color: #166534; border-bottom: 2px solid #4ade80; }
+
+.theme-allocation .print-report-header h2 { color: #0f766e; }
+.theme-allocation .data-table th { background-color: #ccfbf1; color: #0f766e; border-bottom: 2px solid #2dd4bf; }
+
+.theme-enrollment .print-report-header h2 { color: #334155; }
+.theme-enrollment .data-table th { background-color: #e2e8f0; color: #334155; border-bottom: 2px solid #94a3b8; }
+
+.theme-supervisor .print-report-header h2 { color: #be123c; }
+.theme-supervisor .data-table th { background-color: #ffe4e6; color: #be123c; border-bottom: 2px solid #fb7185; }
+
 /* Status Badges */
 .badge {
   display: inline-flex;
@@ -1156,5 +1179,85 @@ button, input, select, textarea {
   
   .search-input-wrapper {
     width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-content {
+    padding: 16px 12px;
+    gap: 20px;
+  }
+  
+  .card {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .header-title h2 {
+    font-size: 18px;
+  }
+
+  .content-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .btn {
+    padding: 8px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .school-card-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .school-info-details {
+    width: 100%;
+  }
+
+  .school-card-item > div:last-child {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .desk-slips-page {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto !important;
+  }
+
+  .filter-bar {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .filter-bar .form-group {
+    min-width: 100%;
+  }
+
+  .filter-bar button {
+    width: 100%;
+    margin-top: 8px;
+  }
+  
+  .print-meta-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stat-card {
+    padding: 16px;
+  }
+  
+  .exam-center-card {
+    padding: 16px;
+  }
+  
+  .mapped-school-tag {
+    font-size: 11px;
+    padding: 4px 10px;
   }
 }

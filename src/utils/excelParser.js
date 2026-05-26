@@ -146,6 +146,8 @@ export const parsePreviousSayExcelFile = (file) => {
               !header.toUpperCase().includes('#') &&
               !header.toUpperCase().includes('SL') &&
               !header.toUpperCase().includes('DISTRICT') &&
+              !header.toUpperCase().includes('SEMESTER') &&
+              !header.toUpperCase().includes('CLASS') &&
               row[idx] !== undefined &&
               row[idx] !== null &&
               String(row[idx]).trim() !== ''
@@ -153,7 +155,8 @@ export const parsePreviousSayExcelFile = (file) => {
               // If the header itself is a subject or says "SUBJECT", or the cell has a subject name
               const val = String(row[idx]).trim();
               if (header.toUpperCase().includes('SUBJECT')) {
-                subjects.push(val);
+                const subList = val.split(/[\n,،]/).map(s => s.trim()).filter(Boolean);
+                subjects.push(...subList);
               } else {
                 // If header is a subject name and cell is ticked/marked (e.g. "YES", "1", or the subject name)
                 if (val.toUpperCase() === 'YES' || val === '1' || val.toUpperCase() === 'TRUE' || val === '✓') {
