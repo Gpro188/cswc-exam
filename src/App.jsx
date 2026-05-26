@@ -176,10 +176,27 @@ function App() {
     const nextTimeTable = timeTable.map(slot => {
       let updatedSlot = slot;
       if (slot.subjects && Array.isArray(slot.subjects)) {
-        const cleanedSubs = slot.subjects.map(s => cleanSubjectName(s));
-        if (JSON.stringify(slot.subjects) !== JSON.stringify(cleanedSubs)) {
+        const migratedSubs = [];
+        let didMigrate = false;
+        
+        slot.subjects.forEach(s => {
+          if (s.includes('||')) {
+            migratedSubs.push(s);
+          } else {
+            didMigrate = true;
+            const cleaned = cleanSubjectName(s);
+            const classesWithSub = [...new Set(registrations.filter(r => cleanSubjectName(r.subject) === cleaned).map(r => r.class))];
+            if (classesWithSub.length > 0) {
+              classesWithSub.forEach(c => migratedSubs.push(`${c}||${cleaned}`));
+            } else {
+              migratedSubs.push(`UNKNOWN||${cleaned}`);
+            }
+          }
+        });
+
+        if (didMigrate || JSON.stringify(slot.subjects) !== JSON.stringify(migratedSubs)) {
           timetableUpdated = true;
-          updatedSlot = { ...slot, subjects: cleanedSubs };
+          updatedSlot = { ...slot, subjects: [...new Set(migratedSubs)] };
         }
       }
       return updatedSlot;

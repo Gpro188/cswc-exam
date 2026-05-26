@@ -25,7 +25,11 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
   useEffect(() => {
     if (selectedSlotId) {
       const slot = timeTable.find(s => s.id === selectedSlotId);
-      setSelectedSubjects(slot ? slot.subjects.map(s => cleanSubjectName(s)) : []);
+      setSelectedSubjects(slot ? slot.subjects.map(s => {
+        if (s.includes('||')) return s;
+        // Fallback for unmigrated data
+        return `UNKNOWN||${cleanSubjectName(s)}`;
+      }) : []);
     } else {
       setSelectedSubjects([]);
     }
@@ -47,13 +51,13 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
   // Extract unique subjects filtered by class if selected
   const classSubjects = useMemo(() => {
     if (!selectedClass) {
-      return [...new Set(registrations.map(r => cleanSubjectName(r.subject)).filter(Boolean))].sort();
+      return [...new Set(registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`).filter(r => !r.startsWith('undefined||') && !r.startsWith('||')))].sort();
     }
     return [...new Set(
       registrations
         .filter(r => r.class === selectedClass)
-        .map(r => cleanSubjectName(r.subject))
-        .filter(Boolean)
+        .map(r => `${r.class}||${cleanSubjectName(r.subject)}`)
+        .filter(r => !r.startsWith('undefined||') && !r.startsWith('||'))
     )].sort();
   }, [registrations, selectedClass]);
 
@@ -62,7 +66,7 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
     const subs = new Set();
     timeTable.forEach(slot => {
       if (slot.id !== selectedSlotId) {
-        slot.subjects.forEach(s => subs.add(cleanSubjectName(s)));
+        slot.subjects.forEach(s => subs.add(s));
       }
     });
     return subs;
@@ -70,10 +74,10 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
 
   // Calculate pending subjects (unscheduled across ALL registrations)
   const pendingSubjects = useMemo(() => {
-    const allUniqueSubs = [...new Set(registrations.map(r => cleanSubjectName(r.subject)).filter(Boolean))].sort();
+    const allUniqueSubs = [...new Set(registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`).filter(r => !r.startsWith('undefined||') && !r.startsWith('||')))].sort();
     const allScheduled = new Set();
     timeTable.forEach(slot => {
-      slot.subjects.forEach(s => allScheduled.add(cleanSubjectName(s)));
+      slot.subjects.forEach(s => allScheduled.add(s));
     });
     return allUniqueSubs.filter(s => !allScheduled.has(s));
   }, [registrations, timeTable]);
@@ -84,10 +88,22 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
     if (showOnlyPending) {
       list = list.filter(sub => !scheduledSubjects.has(sub));
     }
-    return list.filter(sub => 
-      sub.toLowerCase().includes(searchSubject.toLowerCase())
-    );
+    return list.filter(sub => {
+      const displaySub = sub.split('||')[1] || sub;
+      return displaySub.toLowerCase().includes(searchSubject.toLowerCase());
+    });
   }, [classSubjects, searchSubject, showOnlyPending, scheduledSubjects]);
+
+  const displaySubject = (str) => {
+    const parts = str.split('||');
+    if (parts.length > 1) {
+      if (selectedClass && parts[0] === selectedClass) {
+        return parts[1];
+      }
+      return `${parts[1]} (${parts[0]})`;
+    }
+    return str;
+  };
 
   const handleToggleSubject = (sub) => {
     if (selectedSubjects.includes(sub)) {
@@ -139,7 +155,7 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
 
     const updated = timeTable.map(slot => {
       if (slot.id === selectedSlotId) {
-        return { ...slot, subjects: selectedSubjects.map(s => cleanSubjectName(s)) };
+        return { ...slot, subjects: selectedSubjects };
       }
       return slot;
     });
@@ -325,7 +341,7 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
                       return (
                         <label key={sub} className="subject-checkbox-item" dir="rtl" style={{ justifyContent: 'flex-end', textAlign: 'right' }}>
                           <span style={{ marginRight: '8px', fontSize: '13px' }}>
-                            {sub} {!isPending && <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 'normal' }}>(Scheduled in other slot)</span>}
+                            {displaySubject(sub)} {!isPending && <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 'normal' }}>(Scheduled in other slot)</span>}
                           </span>
                           <input 
                             type="checkbox"
@@ -431,7 +447,7 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {slot.subjects.map(sub => (
                         <span key={sub} className="badge badge-neutral" style={{ fontSize: '11px', padding: '4px 8px' }} dir="rtl">
-                          {sub}
+                          {displaySubject(sub)}
                         </span>
                       ))}
                       {slot.subjects.length === 0 && (
@@ -458,7 +474,7 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {pendingSubjects.map(sub => (
             <span key={sub} className="badge badge-warning" style={{ fontSize: '11px', padding: '6px 10px', textTransform: 'none' }} dir="rtl">
-              {sub}
+              {displaySubject(sub)}
             </span>
           ))}
           {pendingSubjects.length === 0 && (

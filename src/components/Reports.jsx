@@ -168,12 +168,13 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
     if (!slot) return [];
 
     const centerCode = selectedCenter;
-    const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
+    const scheduledSubjects = slot.subjects || [];
 
     // Filter registrations that belong to this center AND have subjects in this session
     return combinedRegistrations.filter(r => {
       const regCenterCode = schoolToCenterCode[r.school_code];
-      return regCenterCode === centerCode && scheduledSubjects.includes(cleanSubjectName(r.subject));
+      const subKey = `${r.class}||${cleanSubjectName(r.subject)}`;
+      return regCenterCode === centerCode && scheduledSubjects.includes(subKey);
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [combinedRegistrations, timeTable, selectedSlotId, selectedCenter, schoolToCenterCode]);
 
@@ -212,21 +213,25 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
       sortedSlots.forEach(slot => {
         const slotSubjectsData = [];
         let slotTotal = 0;
-        const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
+        const scheduledSubjects = slot.subjects || [];
 
-        scheduledSubjects.forEach(subject => {
+        scheduledSubjects.forEach(subjectKey => {
           const count = combinedRegistrations.filter(r => {
             const regCenterCode = schoolToCenterCode[r.school_code];
-            return regCenterCode === center.code && cleanSubjectName(r.subject) === subject;
+            const matchKey = `${r.class}||${cleanSubjectName(r.subject)}`;
+            return regCenterCode === center.code && matchKey === subjectKey;
           }).length;
           
           const sayCount = combinedRegistrations.filter(r => {
             const regCenterCode = schoolToCenterCode[r.school_code];
-            return regCenterCode === center.code && cleanSubjectName(r.subject) === subject && r.isSay;
+            const matchKey = `${r.class}||${cleanSubjectName(r.subject)}`;
+            return regCenterCode === center.code && matchKey === subjectKey && r.isSay;
           }).length;
 
           if (count > 0) {
-            slotSubjectsData.push({ subject, count, sayCount });
+            const parts = subjectKey.split('||');
+            const displaySub = parts.length > 1 ? `${parts[1]} (${parts[0]})` : subjectKey;
+            slotSubjectsData.push({ subject: displaySub, count, sayCount });
             slotTotal += count;
           }
         });
