@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Printer, FileSpreadsheet, Layers, ShieldCheck, UserCheck } from 'lucide-react';
 import { cleanSubjectName } from '../utils/matching';
 
-const Reports = ({ institutions, registrations, timeTable }) => {
+const Reports = ({ institutions, registrations, timeTable, previousStudents = [] }) => {
   const [reportType, setReportType] = useState('office_summary');
   const [selectedCenter, setSelectedCenter] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState('');
@@ -17,10 +17,31 @@ const Reports = ({ institutions, registrations, timeTable }) => {
     return institutions.filter(i => i.isExamCenter);
   }, [institutions]);
 
+  // Combine regular registrations with previous SAY students
+  const combinedRegistrations = useMemo(() => {
+    const prevRegs = [];
+    previousStudents.forEach(st => {
+      st.subjects.forEach(sub => {
+        prevRegs.push({
+          uid: st.uid,
+          name: st.name,
+          class: 'PREVIOUS EXAM / SAY',
+          subject: sub,
+          school_code: st.school_code,
+          school_name: st.college,
+          district: st.zone,
+          zone: st.zone,
+          isSay: true
+        });
+      });
+    });
+    return [...registrations, ...prevRegs];
+  }, [registrations, previousStudents]);
+
   // Unique classes list
   const classesList = useMemo(() => {
-    return [...new Set(registrations.map(r => r.class).filter(Boolean))].sort();
-  }, [registrations]);
+    return [...new Set(combinedRegistrations.map(r => r.class).filter(Boolean))].sort();
+  }, [combinedRegistrations]);
 
   // Set default center if none is selected
   if (examCenters.length > 0 && !selectedCenter && selectedCenter !== 'all') {
@@ -41,11 +62,11 @@ const Reports = ({ institutions, registrations, timeTable }) => {
   const subjectsInClass = useMemo(() => {
     if (!selectedClass) return [];
     return [...new Set(
-      registrations
+      combinedRegistrations
         .filter(r => r.class === selectedClass)
         .map(r => cleanSubjectName(r.subject))
     )].sort();
-  }, [registrations, selectedClass]);
+  }, [combinedRegistrations, selectedClass]);
 
   // Map school code to center code
   const schoolToCenterCode = useMemo(() => {
@@ -62,51 +83,67 @@ const Reports = ({ institutions, registrations, timeTable }) => {
     return mapping;
   }, [institutions]);
 
-  // 1. Calculate Office Summary (Total counts grouped by Class + Subject, ordered F1, F2, D1, D2, D3)
-  const officeSummary = useMemo(() => {
-    const counts = {}; // "class_subject" -> { class, subject, count }
-    registrations.forEach(r => {
+  // 1. Calculate Office Summary (Total counts grouped by Class + Subject)
+  const officeSummaryByClass = useMemo(() => {
+    const grouped = {};
+    combinedRegistrations.forEach(r => {
       const klass = r.class || 'UNKNOWN';
       const subject = cleanSubjectName(r.subject || 'UNKNOWN');
-      const key = `${klass}_${subject}`;
-      if (!counts[key]) {
-        counts[key] = { class: klass, subject: subject, count: 0 };
+      if (!grouped[klass]) {
+        grouped[klass] = {};
       }
-      counts[key].count += 1;
+      if (!grouped[klass][subject]) {
+        grouped[klass][subject] = 0;
+      }
+      grouped[klass][subject] += 1;
     });
 
-    const CLASS_ORDER = ['F1', 'F2', 'D1', 'D2', 'D3'];
+    const CLASS_ORDER = ['F1', 'F2', 'D1', 'D2', 'D3', 'PREVIOUS EXAM / SAY'];
     const getClassOrderIndex = (cls) => {
       const idx = CLASS_ORDER.indexOf(cls);
       return idx === -1 ? 999 : idx;
     };
 
-    return Object.values(counts).sort((a, b) => {
-      const classDiff = getClassOrderIndex(a.class) - getClassOrderIndex(b.class);
-      if (classDiff !== 0) return classDiff;
-      return a.subject.localeCompare(b.subject);
+    const sortedClasses = Object.keys(grouped).sort((a, b) => getClassOrderIndex(a) - getClassOrderIndex(b));
+    const result = [];
+
+    sortedClasses.forEach(cls => {
+      const subjects = Object.keys(grouped[cls]).sort();
+      result.push({
+        class: cls,
+        subjects: subjects.map(sub => ({
+          subject: sub,
+          count: grouped[cls][sub]
+        }))
+      });
     });
-  }, [registrations]);
+
+    return result;
+  }, [combinedRegistrations]);
 
   // 2. Calculate Center packing summary
   const centerPackingData = useMemo(() => {
-    const data = {}; // centerCode -> { subject -> count }
+    const data = {}; // centerCode -> { class -> { subject -> count } }
     
     // Seed center structures
     examCenters.forEach(ec => {
-      data[ec.code] = { name: ec.name, place: ec.place, subjects: {} };
+      data[ec.code] = { name: ec.name, place: ec.place, classes: {} };
     });
 
-    registrations.forEach(r => {
+    combinedRegistrations.forEach(r => {
       const centerCode = schoolToCenterCode[r.school_code];
       if (centerCode && data[centerCode]) {
         const cleanedSub = cleanSubjectName(r.subject);
-        data[centerCode].subjects[cleanedSub] = (data[centerCode].subjects[cleanedSub] || 0) + 1;
+        const klass = r.class || 'UNKNOWN';
+        if (!data[centerCode].classes[klass]) {
+          data[centerCode].classes[klass] = {};
+        }
+        data[centerCode].classes[klass][cleanedSub] = (data[centerCode].classes[klass][cleanedSub] || 0) + 1;
       }
     });
 
     return data;
-  }, [registrations, examCenters, schoolToCenterCode]);
+  }, [combinedRegistrations, examCenters, schoolToCenterCode]);
 
   // 3. Attendance Register Data
   const attendanceData = useMemo(() => {
@@ -119,11 +156,11 @@ const Reports = ({ institutions, registrations, timeTable }) => {
     const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
 
     // Filter registrations that belong to this center AND have subjects in this session
-    return registrations.filter(r => {
+    return combinedRegistrations.filter(r => {
       const regCenterCode = schoolToCenterCode[r.school_code];
       return regCenterCode === centerCode && scheduledSubjects.includes(cleanSubjectName(r.subject));
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [registrations, timeTable, selectedSlotId, selectedCenter, schoolToCenterCode]);
+  }, [combinedRegistrations, timeTable, selectedSlotId, selectedCenter, schoolToCenterCode]);
 
   // 4. Center Allocation List Data grouped by Zone
   const institutionsByZone = useMemo(() => {
@@ -163,13 +200,18 @@ const Reports = ({ institutions, registrations, timeTable }) => {
         const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
 
         scheduledSubjects.forEach(subject => {
-          const count = registrations.filter(r => {
+          const count = combinedRegistrations.filter(r => {
             const regCenterCode = schoolToCenterCode[r.school_code];
             return regCenterCode === center.code && cleanSubjectName(r.subject) === subject;
           }).length;
+          
+          const sayCount = combinedRegistrations.filter(r => {
+            const regCenterCode = schoolToCenterCode[r.school_code];
+            return regCenterCode === center.code && cleanSubjectName(r.subject) === subject && r.isSay;
+          }).length;
 
           if (count > 0) {
-            slotSubjectsData.push({ subject, count });
+            slotSubjectsData.push({ subject, count, sayCount });
             slotTotal += count;
           }
         });
@@ -193,7 +235,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
     });
 
     return result;
-  }, [institutions, registrations, timeTable, schoolToCenterCode, fnTime, anTime]);
+  }, [institutions, combinedRegistrations, timeTable, schoolToCenterCode, fnTime, anTime]);
 
   // 6. Seating Candidates list (flat)
   const seatingCandidates = useMemo(() => {
@@ -213,7 +255,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
       slotsToProcess.forEach(slot => {
         const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
 
-        const matchingRegs = registrations.filter(r => {
+        const matchingRegs = combinedRegistrations.filter(r => {
           const regCenterCode = schoolToCenterCode[r.school_code];
           return regCenterCode === centerCode && scheduledSubjects.includes(cleanSubjectName(r.subject));
         });
@@ -239,7 +281,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
     });
 
     return result;
-  }, [registrations, timeTable, selectedSlotId, selectedCenter, schoolToCenterCode, examCenters, fnTime, anTime]);
+  }, [combinedRegistrations, timeTable, selectedSlotId, selectedCenter, schoolToCenterCode, examCenters, fnTime, anTime]);
 
   // 7. Grouped Seating Candidates by Center & Slot
   const groupedSeatingData = useMemo(() => {
@@ -426,8 +468,8 @@ const Reports = ({ institutions, registrations, timeTable }) => {
 
             <div className="print-meta-grid">
               <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-              <div className="meta-item">Total Subject Registers: <strong>{registrations.length}</strong></div>
-              <div className="meta-item">Total Candidates: <strong>{new Set(registrations.map(r=>r.uid)).size}</strong></div>
+              <div className="meta-item">Total Subject Registers: <strong>{combinedRegistrations.length}</strong></div>
+              <div className="meta-item">Total Candidates: <strong>{new Set(combinedRegistrations.map(r=>r.uid)).size}</strong></div>
               <div className="meta-item">Total Institutions: <strong>{institutions.length}</strong></div>
             </div>
 
@@ -435,27 +477,30 @@ const Reports = ({ institutions, registrations, timeTable }) => {
               <thead>
                 <tr>
                   <th style={{ width: '80px', textAlign: 'center' }}>SL NO</th>
-                  <th style={{ width: '150px', textAlign: 'center' }}>Class</th>
                   <th style={{ textAlign: 'left' }}>Subject Name</th>
                   <th style={{ width: '180px', textAlign: 'center' }}>Required Prints</th>
                 </tr>
               </thead>
               <tbody>
-                {officeSummary.map((item, idx) => (
-                  <tr key={`${item.class}_${item.subject}`}>
-                    <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className="badge badge-neutral" style={{ fontSize: '12px', padding: '6px 12px', fontWeight: '800' }}>
-                        {item.class}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: '700', fontSize: '15px', textAlign: 'left' }}>
-                      {item.subject}
-                    </td>
-                    <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--primary)' }}>
-                      {item.count}
-                    </td>
-                  </tr>
+                {officeSummaryByClass.map((classGroup) => (
+                  <React.Fragment key={classGroup.class}>
+                    <tr style={{ backgroundColor: '#e0e7ff' }}>
+                      <td colSpan="3" style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: '#1e40af', padding: '12px' }}>
+                        {classGroup.class}
+                      </td>
+                    </tr>
+                    {classGroup.subjects.map((item, idx) => (
+                      <tr key={`${classGroup.class}_${item.subject}`}>
+                        <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                        <td style={{ fontWeight: '700', fontSize: '15px', textAlign: 'left' }}>
+                          {item.subject}
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--primary)' }}>
+                          {item.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -474,8 +519,12 @@ const Reports = ({ institutions, registrations, timeTable }) => {
             {selectedCenter === 'all' ? (
               // Print all centers sequentially
               Object.entries(centerPackingData).map(([cCode, cData], cIdx) => {
-                const subEntries = Object.entries(cData.subjects);
-                const totalPapers = subEntries.reduce((sum, [_, v]) => sum + v, 0);
+                let totalPapers = 0;
+                Object.values(cData.classes).forEach(subs => {
+                  Object.values(subs).forEach(count => {
+                    totalPapers += count;
+                  });
+                });
                 
                 return (
                   <div key={cCode} className="theme-packing page-break-after" style={{ marginBottom: '40px' }}>
@@ -502,15 +551,22 @@ const Reports = ({ institutions, registrations, timeTable }) => {
                         </tr>
                       </thead>
                       <tbody>
-                        {subEntries.map(([subject, count], idx) => (
-                          <tr key={subject}>
-                            <td>{idx + 1}</td>
-                            <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
-                            <td style={{ textAlign: 'center', fontWeight: '800' }}>{count}</td>
-                            <td>[ &nbsp; ]</td>
-                          </tr>
+                        {Object.entries(cData.classes).map(([klass, subjectsObj]) => (
+                          <React.Fragment key={klass}>
+                            <tr style={{ backgroundColor: '#fef3c7' }}>
+                              <td colSpan="4" style={{ textAlign: 'center', fontWeight: '800', color: '#b45309', padding: '10px' }}>{klass}</td>
+                            </tr>
+                            {Object.entries(subjectsObj).map(([subject, count], idx) => (
+                              <tr key={subject}>
+                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
+                                <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--warning)' }}>{count}</td>
+                                <td style={{ textAlign: 'center' }}>[ &nbsp; ]</td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         ))}
-                        {subEntries.length === 0 && (
+                        {Object.keys(cData.classes).length === 0 && (
                           <tr>
                             <td colSpan="4" style={{ textAlign: 'center', fontStyle: 'italic', padding: '24px' }}>
                               No candidate registrations are assigned to write at this center.
@@ -532,8 +588,12 @@ const Reports = ({ institutions, registrations, timeTable }) => {
               (() => {
                 const cData = centerPackingData[selectedCenter];
                 if (!cData) return <div>No center found</div>;
-                const subEntries = Object.entries(cData.subjects);
-                const totalPapers = subEntries.reduce((sum, [_, v]) => sum + v, 0);
+                let totalPapers = 0;
+                Object.values(cData.classes).forEach(subs => {
+                  Object.values(subs).forEach(count => {
+                    totalPapers += count;
+                  });
+                });
 
                 return (
                   <div className="theme-packing">
@@ -560,15 +620,22 @@ const Reports = ({ institutions, registrations, timeTable }) => {
                         </tr>
                       </thead>
                       <tbody>
-                        {subEntries.map(([subject, count], idx) => (
-                          <tr key={subject}>
-                            <td>{idx + 1}</td>
-                            <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
-                            <td style={{ textAlign: 'center', fontWeight: '800' }}>{count}</td>
-                            <td>[ &nbsp; ]</td>
-                          </tr>
+                        {Object.entries(cData.classes).map(([klass, subjectsObj]) => (
+                          <React.Fragment key={klass}>
+                            <tr style={{ backgroundColor: '#fef3c7' }}>
+                              <td colSpan="4" style={{ textAlign: 'center', fontWeight: '800', color: '#b45309', padding: '10px' }}>{klass}</td>
+                            </tr>
+                            {Object.entries(subjectsObj).map(([subject, count], idx) => (
+                              <tr key={subject}>
+                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
+                                <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--warning)' }}>{count}</td>
+                                <td style={{ textAlign: 'center' }}>[ &nbsp; ]</td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         ))}
-                        {subEntries.length === 0 && (
+                        {Object.keys(cData.classes).length === 0 && (
                           <tr>
                             <td colSpan="4" style={{ textAlign: 'center', fontStyle: 'italic', padding: '24px' }}>
                               No candidate registrations are assigned to write at this center.
@@ -655,6 +722,7 @@ const Reports = ({ institutions, registrations, timeTable }) => {
                                 {slot.subjects.map(sub => (
                                   <span key={sub.subject} className="badge badge-neutral" style={{ fontSize: '11px', padding: '4px 8px' }}>
                                     {sub.subject}: <strong>{sub.count}</strong>
+                                    {sub.sayCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: '6px', fontWeight: '800' }}>[SAY: {sub.sayCount}]</span>}
                                   </span>
                                 ))}
                                 {slot.subjects.length === 0 && (

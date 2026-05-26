@@ -360,6 +360,7 @@ function App() {
             institutions={institutions}
             registrations={registrations}
             timeTable={timeTable}
+            previousStudents={previousStudents}
           />
         );
       case 'import':
