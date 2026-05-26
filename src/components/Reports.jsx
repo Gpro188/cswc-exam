@@ -19,13 +19,23 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
 
   // Combine regular registrations with previous SAY students
   const combinedRegistrations = useMemo(() => {
+    // Build a map of subjects to their standard class
+    const subjectToClassMap = {};
+    registrations.forEach(r => {
+      if (r.subject && r.class) {
+        subjectToClassMap[cleanSubjectName(r.subject)] = r.class;
+      }
+    });
+
     const prevRegs = [];
     previousStudents.forEach(st => {
       st.subjects.forEach(sub => {
+        const cleanedSub = cleanSubjectName(sub);
+        const inferredClass = subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS';
         prevRegs.push({
           uid: st.uid,
           name: st.name,
-          class: 'PREVIOUS EXAM / SAY',
+          class: `PREVIOUS EXAM / SAY (${inferredClass})`,
           subject: sub,
           school_code: st.school_code,
           school_name: st.college,
@@ -98,8 +108,13 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
       grouped[klass][subject] += 1;
     });
 
-    const CLASS_ORDER = ['F1', 'F2', 'D1', 'D2', 'D3', 'PREVIOUS EXAM / SAY'];
+    const CLASS_ORDER = ['F1', 'F2', 'D1', 'D2', 'D3'];
     const getClassOrderIndex = (cls) => {
+      if (cls.startsWith('PREVIOUS EXAM / SAY')) {
+        const baseClass = cls.match(/\((.*?)\)/)?.[1] || '';
+        const baseIdx = CLASS_ORDER.indexOf(baseClass);
+        return 100 + (baseIdx === -1 ? 99 : baseIdx);
+      }
       const idx = CLASS_ORDER.indexOf(cls);
       return idx === -1 ? 999 : idx;
     };
