@@ -58,6 +58,7 @@ const PreviousSayStudents = ({ previousStudents, institutions, registrations, on
           school_code: matchedInst ? matchedInst.code : 'UNKNOWN',
           college: matchedInst ? matchedInst.name : st.college,
           zone: matchedInst ? matchedInst.zone : 'UNASSIGNED',
+          class: st.class || 'UNKNOWN CLASS',
           subjects: (st.subjects || []).map(s => cleanSubjectName(s))
         };
       });
@@ -135,6 +136,7 @@ const PreviousSayStudents = ({ previousStudents, institutions, registrations, on
       school_code: schoolObj.code,
       college: schoolObj.name,
       zone: schoolObj.zone,
+      class: 'UNKNOWN CLASS',
       subjects: selectedSubs.map(s => cleanSubjectName(s))
     };
 
@@ -402,6 +404,7 @@ const PreviousSayStudents = ({ previousStudents, institutions, registrations, on
                   <tr>
                     <th>UID</th>
                     <th>Candidate Name</th>
+                    <th>Class</th>
                     <th>College</th>
                     <th>Zone</th>
                     <th>Subjects Registered</th>
@@ -416,6 +419,7 @@ const PreviousSayStudents = ({ previousStudents, institutions, registrations, on
                       <tr key={idx}>
                         <td><code>{st.uid}</code></td>
                         <td><strong>{st.name}</strong></td>
+                        <td><span className="badge badge-neutral" style={{fontSize: '11px'}}>{st.class || 'UNKNOWN'}</span></td>
                         <td>{st.college}</td>
                         <td>{st.zone}</td>
                         <td>

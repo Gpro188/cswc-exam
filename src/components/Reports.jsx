@@ -31,7 +31,7 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
     previousStudents.forEach(st => {
       st.subjects.forEach(sub => {
         const cleanedSub = cleanSubjectName(sub);
-        const inferredClass = subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS';
+        const inferredClass = st.class && st.class !== 'UNKNOWN CLASS' ? st.class : (subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS');
         prevRegs.push({
           uid: st.uid,
           name: st.name,

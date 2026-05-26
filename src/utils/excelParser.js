@@ -125,12 +125,14 @@ export const parsePreviousSayExcelFile = (file) => {
           const contactKey = Object.keys(rowObj).find(k => k.toUpperCase().includes('CONTACT') || k.toUpperCase().includes('PHONE') || k.toUpperCase().includes('MOBILE'));
           const collegeKey = Object.keys(rowObj).find(k => k.toUpperCase().includes('COLLEGE') || k.toUpperCase().includes('INSTITUT'));
           const zoneKey = Object.keys(rowObj).find(k => k.toUpperCase().includes('ZONE'));
+          const classKey = Object.keys(rowObj).find(k => k.toUpperCase() === 'CLASS' || k.toUpperCase().includes('COURSE'));
 
           const name = nameKey ? rowObj[nameKey] : '';
           const uid = uidKey ? rowObj[uidKey] : '';
           const contact = contactKey ? rowObj[contactKey] : '';
           const college = collegeKey ? rowObj[collegeKey] : '';
           const zone = zoneKey ? rowObj[zoneKey] : '';
+          const className = classKey ? rowObj[classKey] : '';
 
           if (!name && !uid) return;
 
@@ -143,6 +145,7 @@ export const parsePreviousSayExcelFile = (file) => {
               header !== contactKey &&
               header !== collegeKey &&
               header !== zoneKey &&
+              header !== classKey &&
               !header.toUpperCase().includes('#') &&
               !header.toUpperCase().includes('SL') &&
               !header.toUpperCase().includes('DISTRICT') &&
@@ -174,6 +177,7 @@ export const parsePreviousSayExcelFile = (file) => {
             contact: String(contact).trim(),
             college: String(college).trim(),
             zone: String(zone).trim(),
+            class: String(className).trim(),
             subjects: [...new Set(subjects)] // Unique subjects
           });
         });
