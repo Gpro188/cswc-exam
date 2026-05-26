@@ -181,7 +181,9 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
   // 4. Center Allocation List Data grouped by Zone
   const institutionsByZone = useMemo(() => {
     const grouped = {};
-    institutions.forEach(inst => {
+    const filteredInstitutions = institutions.filter(inst => inst.isExamCenter || inst.assignedToCenter);
+
+    filteredInstitutions.forEach(inst => {
       const zone = inst.zone || 'UNASSIGNED';
       if (!grouped[zone]) {
         grouped[zone] = [];
@@ -273,11 +275,12 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
 
     centersToProcess.forEach(centerCode => {
       slotsToProcess.forEach(slot => {
-        const scheduledSubjects = slot.subjects.map(s => cleanSubjectName(s));
+        const scheduledSubjects = slot.subjects || [];
 
         const matchingRegs = combinedRegistrations.filter(r => {
           const regCenterCode = schoolToCenterCode[r.school_code];
-          return regCenterCode === centerCode && scheduledSubjects.includes(cleanSubjectName(r.subject));
+          const matchKey = `${r.class}||${cleanSubjectName(r.subject)}`;
+          return regCenterCode === centerCode && scheduledSubjects.includes(matchKey);
         });
 
         const sortedRegs = [...matchingRegs].sort((a, b) => {
