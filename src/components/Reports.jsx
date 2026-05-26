@@ -1120,9 +1120,8 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
                   <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
                   <th style={{ width: '80px' }}>CODE</th>
                   <th style={{ textAlign: 'left' }}>CENTER NAME & PLACE</th>
-                  <th style={{ textAlign: 'left' }}>SUPERVISOR NAME</th>
-                  <th style={{ textAlign: 'left' }}>SUPERVISOR PLACE</th>
-                  <th style={{ textAlign: 'left' }}>SUPERVISOR NUMBER</th>
+                  <th style={{ textAlign: 'left' }}>SUPERVISOR 1</th>
+                  <th style={{ textAlign: 'left' }}>SUPERVISOR 2 (OPTIONAL)</th>
                 </tr>
               </thead>
               <tbody>
@@ -1134,9 +1133,24 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
                       <div style={{ fontWeight: '700' }}>{center.name}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{center.place} | {center.district}</div>
                     </td>
-                    <td style={{ textAlign: 'left', fontWeight: '600' }}>{center.supervisor_name || '-'}</td>
-                    <td style={{ textAlign: 'left' }}>{center.supervisor_place || '-'}</td>
-                    <td style={{ textAlign: 'left' }}>{center.supervisor_phone || '-'}</td>
+                    <td style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: '600' }}>{center.supervisor_name || '-'}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {center.supervisor_place ? `${center.supervisor_place} | ` : ''} {center.supervisor_phone || ''}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'left' }}>
+                      {center.supervisor2_name ? (
+                        <>
+                          <div style={{ fontWeight: '600' }}>{center.supervisor2_name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {center.supervisor2_place ? `${center.supervisor2_place} | ` : ''} {center.supervisor2_phone || ''}
+                          </div>
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>-</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {examCenters.length === 0 && (

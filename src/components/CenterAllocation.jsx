@@ -25,6 +25,9 @@ const CenterAllocation = ({ institutions, registrations, previousStudents = [], 
   const [supName, setSupName] = useState('');
   const [supPlace, setSupPlace] = useState('');
   const [supPhone, setSupPhone] = useState('');
+  const [sup2Name, setSup2Name] = useState('');
+  const [sup2Place, setSup2Place] = useState('');
+  const [sup2Phone, setSup2Phone] = useState('');
 
   const startEditing = (school) => {
     setEditingSchoolCode(school.code);
@@ -59,6 +62,9 @@ const CenterAllocation = ({ institutions, registrations, previousStudents = [], 
     setSupName(center.supervisor_name || '');
     setSupPlace(center.supervisor_place || '');
     setSupPhone(center.supervisor_phone || '');
+    setSup2Name(center.supervisor2_name || '');
+    setSup2Place(center.supervisor2_place || '');
+    setSup2Phone(center.supervisor2_phone || '');
   };
 
   const saveSupervisor = (center) => {
@@ -66,7 +72,10 @@ const CenterAllocation = ({ institutions, registrations, previousStudents = [], 
       ...center,
       supervisor_name: supName.trim(),
       supervisor_place: supPlace.trim(),
-      supervisor_phone: supPhone.trim()
+      supervisor_phone: supPhone.trim(),
+      supervisor2_name: sup2Name.trim(),
+      supervisor2_place: sup2Place.trim(),
+      supervisor2_phone: sup2Phone.trim()
     });
     setEditingSupervisorCode('');
   };
@@ -566,21 +575,38 @@ const CenterAllocation = ({ institutions, registrations, previousStudents = [], 
                     
                     {editingSupervisorCode === center.code ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Primary Supervisor</div>
                         <div style={{ display: 'flex', gap: '10px' }}>
                           <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Name" value={supName} onChange={e => setSupName(e.target.value)} />
                           <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Place" value={supPlace} onChange={e => setSupPlace(e.target.value)} />
                           <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Phone/Number" value={supPhone} onChange={e => setSupPhone(e.target.value)} />
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Secondary Supervisor (Optional)</div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Name (Optional)" value={sup2Name} onChange={e => setSup2Name(e.target.value)} />
+                          <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Place" value={sup2Place} onChange={e => setSup2Place(e.target.value)} />
+                          <input className="form-input" style={{ flex: 1, padding: '6px', fontSize: '12px' }} placeholder="Phone/Number" value={sup2Phone} onChange={e => setSup2Phone(e.target.value)} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
                           <button className="btn btn-secondary btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => setEditingSupervisorCode('')}>Cancel</button>
                           <button className="btn btn-success btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => saveSupervisor(center)}>Save</button>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: '13px', display: 'flex', gap: '16px' }}>
-                        <div>Name: <strong>{center.supervisor_name || 'Not Set'}</strong></div>
-                        <div>Place: <strong>{center.supervisor_place || 'Not Set'}</strong></div>
-                        <div>Number: <strong>{center.supervisor_phone || 'Not Set'}</strong></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '13px', display: 'flex', gap: '16px' }}>
+                          <div>Name: <strong>{center.supervisor_name || 'Not Set'}</strong></div>
+                          <div>Place: <strong>{center.supervisor_place || 'Not Set'}</strong></div>
+                          <div>Number: <strong>{center.supervisor_phone || 'Not Set'}</strong></div>
+                        </div>
+                        {(center.supervisor2_name || center.supervisor2_place || center.supervisor2_phone) && (
+                          <div style={{ fontSize: '13px', display: 'flex', gap: '16px', borderTop: '1px dashed var(--border-color)', paddingTop: '8px', color: 'var(--text-muted)' }}>
+                            <div style={{ fontSize: '11px', alignSelf: 'center', marginRight: '4px' }}>2ND SUP:</div>
+                            <div>Name: <strong>{center.supervisor2_name || '-'}</strong></div>
+                            <div>Place: <strong>{center.supervisor2_place || '-'}</strong></div>
+                            <div>Number: <strong>{center.supervisor2_phone || '-'}</strong></div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
