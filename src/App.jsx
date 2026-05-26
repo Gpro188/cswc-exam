@@ -356,6 +356,7 @@ function App() {
         return (
           <TimeTable 
             registrations={registrations}
+            previousStudents={previousStudents}
             timeTable={timeTable}
             onUpdateTimeTable={updateTimeTable}
           />

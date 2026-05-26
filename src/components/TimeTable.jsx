@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Clock, Plus, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { cleanSubjectName } from '../utils/matching';
 
-const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
+const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTimeTable }) => {
   // Step 1 states: Create Slot
   const [date, setDate] = useState('');
   const [session, setSession] = useState('Forenoon (FN)');
@@ -45,21 +45,28 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
 
   // Extract unique classes
   const classes = useMemo(() => {
-    return [...new Set(registrations.map(r => r.class).filter(Boolean))].sort();
-  }, [registrations]);
+    const allRegClasses = registrations.map(r => r.class);
+    const allPrevClasses = previousStudents.map(r => r.class);
+    return [...new Set([...allRegClasses, ...allPrevClasses].filter(Boolean))].sort();
+  }, [registrations, previousStudents]);
 
   // Extract unique subjects filtered by class if selected
   const classSubjects = useMemo(() => {
+    const allRegSubjects = registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`);
+    const allPrevSubjects = [];
+    previousStudents.forEach(st => {
+      if (st.subjects) {
+        st.subjects.forEach(sub => allPrevSubjects.push(`${st.class}||${cleanSubjectName(sub)}`));
+      }
+    });
+
+    const combinedSubjects = [...allRegSubjects, ...allPrevSubjects].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
+
     if (!selectedClass) {
-      return [...new Set(registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`).filter(r => !r.startsWith('undefined||') && !r.startsWith('||')))].sort();
+      return [...new Set(combinedSubjects)].sort();
     }
-    return [...new Set(
-      registrations
-        .filter(r => r.class === selectedClass)
-        .map(r => `${r.class}||${cleanSubjectName(r.subject)}`)
-        .filter(r => !r.startsWith('undefined||') && !r.startsWith('||'))
-    )].sort();
-  }, [registrations, selectedClass]);
+    return [...new Set(combinedSubjects.filter(r => r.startsWith(`${selectedClass}||`)))].sort();
+  }, [registrations, previousStudents, selectedClass]);
 
   // Calculate subjects that are already scheduled in the timetable (excluding current slot)
   const scheduledSubjects = useMemo(() => {
@@ -74,13 +81,23 @@ const TimeTable = ({ registrations, timeTable, onUpdateTimeTable }) => {
 
   // Calculate pending subjects (unscheduled across ALL registrations)
   const pendingSubjects = useMemo(() => {
-    const allUniqueSubs = [...new Set(registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`).filter(r => !r.startsWith('undefined||') && !r.startsWith('||')))].sort();
+    const allRegSubjects = registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`);
+    const allPrevSubjects = [];
+    previousStudents.forEach(st => {
+      if (st.subjects) {
+        st.subjects.forEach(sub => allPrevSubjects.push(`${st.class}||${cleanSubjectName(sub)}`));
+      }
+    });
+
+    const combinedSubjects = [...allRegSubjects, ...allPrevSubjects].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
+    const allUniqueSubs = [...new Set(combinedSubjects)].sort();
+    
     const allScheduled = new Set();
     timeTable.forEach(slot => {
       slot.subjects.forEach(s => allScheduled.add(s));
     });
     return allUniqueSubs.filter(s => !allScheduled.has(s));
-  }, [registrations, timeTable]);
+  }, [registrations, previousStudents, timeTable]);
 
   // Filter subjects by class, search text, and pending status
   const filteredSubjects = useMemo(() => {
