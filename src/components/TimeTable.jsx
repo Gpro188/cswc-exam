@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Clock, Plus, Trash2, Save, AlertTriangle } from 'lucide-react';
 import { cleanSubjectName } from '../utils/matching';
 
-const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTimeTable }) => {
+const TimeTable = ({ mode = 'regular', registrations, previousStudents = [], timeTable, onUpdateTimeTable }) => {
   // Step 1 states: Create Slot
   const [date, setDate] = useState('');
   const [session, setSession] = useState('Forenoon (FN)');
@@ -25,15 +25,24 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
   useEffect(() => {
     if (selectedSlotId) {
       const slot = timeTable.find(s => s.id === selectedSlotId);
-      setSelectedSubjects(slot ? slot.subjects.map(s => {
-        if (s.includes('||')) return s;
-        // Fallback for unmigrated data
-        return `UNKNOWN||${cleanSubjectName(s)}`;
-      }) : []);
+      if (slot) {
+        // Filter slot subjects based on mode
+        const modeSubs = slot.subjects ? slot.subjects.filter(s => {
+          const isPrev = s.startsWith('PREVIOUS EXAM / SAY');
+          return mode === 'regular' ? !isPrev : isPrev;
+        }) : [];
+        setSelectedSubjects(modeSubs.map(s => {
+          if (s.includes('||')) return s;
+          // Fallback for unmigrated data
+          return `UNKNOWN||${cleanSubjectName(s)}`;
+        }));
+      } else {
+        setSelectedSubjects([]);
+      }
     } else {
       setSelectedSubjects([]);
     }
-  }, [selectedSlotId, timeTable]);
+  }, [selectedSlotId, timeTable, mode]);
 
   // Set default slot if none is selected and there are slots
   useEffect(() => {
@@ -43,61 +52,122 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
     }
   }, [timeTable, selectedSlotId]);
 
-  // Extract unique classes
+  // Map of subjects to their standard class (to infer previous student classes)
+  const subjectToClassMap = useMemo(() => {
+    const mapping = {};
+    registrations.forEach(r => {
+      if (r.subject && r.class) {
+        mapping[cleanSubjectName(r.subject)] = r.class;
+      }
+    });
+    return mapping;
+  }, [registrations]);
+
+  // Extract unique classes based on mode
   const classes = useMemo(() => {
-    const allRegClasses = registrations.map(r => r.class);
-    const allPrevClasses = previousStudents.map(r => r.class);
-    return [...new Set([...allRegClasses, ...allPrevClasses].filter(Boolean))].sort();
-  }, [registrations, previousStudents]);
+    if (mode === 'regular') {
+      const allRegClasses = registrations.map(r => r.class);
+      return [...new Set(allRegClasses.filter(Boolean))].sort();
+    } else {
+      // In previous mode, we want the inferred previous SAY classes
+      const prevClasses = [];
+      previousStudents.forEach(st => {
+        if (st.subjects) {
+          st.subjects.forEach(sub => {
+            const cleanedSub = cleanSubjectName(sub);
+            const inferredClass = st.class && st.class !== 'UNKNOWN CLASS' ? st.class : (subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS');
+            prevClasses.push(`PREVIOUS EXAM / SAY (${inferredClass})`);
+          });
+        }
+      });
+      return [...new Set(prevClasses)].sort();
+    }
+  }, [mode, registrations, previousStudents, subjectToClassMap]);
 
   // Extract unique subjects filtered by class if selected
   const classSubjects = useMemo(() => {
-    const allRegSubjects = registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`);
-    const allPrevSubjects = [];
-    previousStudents.forEach(st => {
-      if (st.subjects) {
-        st.subjects.forEach(sub => allPrevSubjects.push(`${st.class}||${cleanSubjectName(sub)}`));
+    if (mode === 'regular') {
+      const allRegSubjects = registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`);
+      const combined = [...new Set(allRegSubjects)].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
+      
+      if (!selectedClass) {
+        return combined.sort();
       }
-    });
+      return combined.filter(r => r.startsWith(`${selectedClass}||`)).sort();
+    } else {
+      const allPrevSubjects = [];
+      previousStudents.forEach(st => {
+        if (st.subjects) {
+          st.subjects.forEach(sub => {
+            const cleanedSub = cleanSubjectName(sub);
+            const inferredClass = st.class && st.class !== 'UNKNOWN CLASS' ? st.class : (subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS');
+            allPrevSubjects.push(`PREVIOUS EXAM / SAY (${inferredClass})||${cleanedSub}`);
+          });
+        }
+      });
+      const combined = [...new Set(allPrevSubjects)].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
 
-    const combinedSubjects = [...allRegSubjects, ...allPrevSubjects].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
-
-    if (!selectedClass) {
-      return [...new Set(combinedSubjects)].sort();
+      if (!selectedClass) {
+        return combined.sort();
+      }
+      return combined.filter(r => r.startsWith(`${selectedClass}||`)).sort();
     }
-    return [...new Set(combinedSubjects.filter(r => r.startsWith(`${selectedClass}||`)))].sort();
-  }, [registrations, previousStudents, selectedClass]);
+  }, [mode, registrations, previousStudents, selectedClass, subjectToClassMap]);
 
   // Calculate subjects that are already scheduled in the timetable (excluding current slot)
   const scheduledSubjects = useMemo(() => {
     const subs = new Set();
     timeTable.forEach(slot => {
-      if (slot.id !== selectedSlotId) {
+      if (slot.id !== selectedSlotId && slot.subjects) {
         slot.subjects.forEach(s => subs.add(s));
       }
     });
     return subs;
   }, [timeTable, selectedSlotId]);
 
-  // Calculate pending subjects (unscheduled across ALL registrations)
+  // Calculate pending subjects (unscheduled across ALL registrations of current mode)
   const pendingSubjects = useMemo(() => {
-    const allRegSubjects = registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`);
-    const allPrevSubjects = [];
-    previousStudents.forEach(st => {
-      if (st.subjects) {
-        st.subjects.forEach(sub => allPrevSubjects.push(`${st.class}||${cleanSubjectName(sub)}`));
-      }
-    });
-
-    const combinedSubjects = [...allRegSubjects, ...allPrevSubjects].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
-    const allUniqueSubs = [...new Set(combinedSubjects)].sort();
-    
-    const allScheduled = new Set();
-    timeTable.forEach(slot => {
-      slot.subjects.forEach(s => allScheduled.add(s));
-    });
-    return allUniqueSubs.filter(s => !allScheduled.has(s));
-  }, [registrations, previousStudents, timeTable]);
+    if (mode === 'regular') {
+      const allRegSubjects = registrations.map(r => `${r.class}||${cleanSubjectName(r.subject)}`);
+      const allUniqueSubs = [...new Set(allRegSubjects)].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
+      
+      const allScheduled = new Set();
+      timeTable.forEach(slot => {
+        if (slot.subjects) {
+          slot.subjects.forEach(s => {
+            if (!s.startsWith('PREVIOUS EXAM / SAY')) {
+              allScheduled.add(s);
+            }
+          });
+        }
+      });
+      return allUniqueSubs.filter(s => !allScheduled.has(s)).sort();
+    } else {
+      const allPrevSubjects = [];
+      previousStudents.forEach(st => {
+        if (st.subjects) {
+          st.subjects.forEach(sub => {
+            const cleanedSub = cleanSubjectName(sub);
+            const inferredClass = st.class && st.class !== 'UNKNOWN CLASS' ? st.class : (subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS');
+            allPrevSubjects.push(`PREVIOUS EXAM / SAY (${inferredClass})||${cleanedSub}`);
+          });
+        }
+      });
+      const allUniqueSubs = [...new Set(allPrevSubjects)].filter(r => !r.startsWith('undefined||') && !r.startsWith('||'));
+      
+      const allScheduled = new Set();
+      timeTable.forEach(slot => {
+        if (slot.subjects) {
+          slot.subjects.forEach(s => {
+            if (s.startsWith('PREVIOUS EXAM / SAY')) {
+              allScheduled.add(s);
+            }
+          });
+        }
+      });
+      return allUniqueSubs.filter(s => !allScheduled.has(s)).sort();
+    }
+  }, [mode, registrations, previousStudents, timeTable, subjectToClassMap]);
 
   // Filter subjects by class, search text, and pending status
   const filteredSubjects = useMemo(() => {
@@ -162,7 +232,7 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
     alert(`Exam slot for ${new Date(date).toLocaleDateString()} (${session}) created! Now assign subjects to it in Step 2.`);
   };
 
-  // Step 2: Save subjects to slot
+  // Step 2: Save subjects to slot (safely merging)
   const handleSaveSubjectsToSlot = (e) => {
     e.preventDefault();
     if (!selectedSlotId) {
@@ -172,7 +242,18 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
 
     const updated = timeTable.map(slot => {
       if (slot.id === selectedSlotId) {
-        return { ...slot, subjects: selectedSubjects };
+        let mergedSubjects;
+        const currentSubjects = slot.subjects || [];
+        if (mode === 'regular') {
+          // Keep previous SAY subjects, update regular ones
+          const prevSubs = currentSubjects.filter(s => s.startsWith('PREVIOUS EXAM / SAY'));
+          mergedSubjects = [...selectedSubjects, ...prevSubs];
+        } else {
+          // Keep regular subjects, update previous SAY ones
+          const regSubs = currentSubjects.filter(s => !s.startsWith('PREVIOUS EXAM / SAY'));
+          mergedSubjects = [...selectedSubjects, ...regSubs];
+        }
+        return { ...slot, subjects: mergedSubjects };
       }
       return slot;
     });
@@ -291,7 +372,7 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
           {/* STEP 2: Assign Subjects */}
           <div className="card">
             <div className="card-title">
-              <h3>Step 2: Assign Subjects to Slot</h3>
+              <h3>Step 2: Assign {mode === 'regular' ? 'Regular' : 'SAY'} Subjects to Slot</h3>
             </div>
 
             {timeTable.length === 0 ? (
@@ -459,19 +540,40 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>
-                      Scheduled Subjects ({slot.subjects.length}):
+                      Scheduled Subjects ({slot.subjects ? slot.subjects.filter(s => {
+                        const isPrev = s.startsWith('PREVIOUS EXAM / SAY');
+                        return mode === 'regular' ? !isPrev : isPrev;
+                      }).length : 0}):
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {slot.subjects.map(sub => (
-                        <span key={sub} className="badge badge-neutral" style={{ fontSize: '11px', padding: '4px 8px' }} dir="rtl">
-                          {displaySubject(sub)}
-                        </span>
-                      ))}
-                      {slot.subjects.length === 0 && (
-                        <span style={{ fontSize: '11px', color: 'var(--danger)', fontStyle: 'italic' }}>
-                          No subjects assigned yet. Select this slot to assign.
-                        </span>
-                      )}
+                      {(() => {
+                        const regSubs = slot.subjects ? slot.subjects.filter(s => !s.startsWith('PREVIOUS EXAM / SAY')) : [];
+                        const prevSubs = slot.subjects ? slot.subjects.filter(s => s.startsWith('PREVIOUS EXAM / SAY')) : [];
+                        
+                        const displayList = mode === 'regular' ? regSubs : prevSubs;
+                        const otherCount = mode === 'regular' ? prevSubs.length : regSubs.length;
+                        const otherLabel = mode === 'regular' ? 'SAY' : 'regular';
+                        
+                        return (
+                          <>
+                            {displayList.map(sub => (
+                              <span key={sub} className="badge badge-neutral" style={{ fontSize: '11px', padding: '4px 8px' }} dir="rtl">
+                                {displaySubject(sub)}
+                              </span>
+                            ))}
+                            {displayList.length === 0 && (
+                              <span style={{ fontSize: '11px', color: 'var(--danger)', fontStyle: 'italic' }}>
+                                No {mode === 'regular' ? 'regular' : 'SAY'} subjects assigned yet.
+                              </span>
+                            )}
+                            {otherCount > 0 && (
+                              <span className="badge badge-info" style={{ fontSize: '10px', padding: '2px 6px', fontWeight: 'bold' }}>
+                                + {otherCount} {otherLabel} {otherCount === 1 ? 'subject' : 'subjects'}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -486,7 +588,7 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
       {/* Pending Subjects Card */}
       <div className="card">
         <div className="card-title">
-          <h3>Pending Subjects to Schedule ({pendingSubjects.length})</h3>
+          <h3>Pending {mode === 'regular' ? 'Regular' : 'SAY'} Subjects to Schedule ({pendingSubjects.length})</h3>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {pendingSubjects.map(sub => (
@@ -496,7 +598,7 @@ const TimeTable = ({ registrations, previousStudents = [], timeTable, onUpdateTi
           ))}
           {pendingSubjects.length === 0 && (
             <div style={{ color: 'var(--success)', fontSize: '14px', fontWeight: '700', padding: '8px 0' }}>
-              ✓ All registered subjects have been scheduled in the active timetable!
+              ✓ All registered {mode === 'regular' ? 'regular' : 'SAY'} subjects have been scheduled in the active timetable!
             </div>
           )}
         </div>

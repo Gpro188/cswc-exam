@@ -1,6 +1,31 @@
 import React, { useState, useMemo } from 'react';
-import { Printer, FileSpreadsheet, Layers, ShieldCheck, UserCheck } from 'lucide-react';
+import { 
+  Printer, 
+  FileSpreadsheet, 
+  Layers, 
+  ShieldCheck, 
+  UserCheck,
+  School,
+  MapPin,
+  Calendar,
+  FileText,
+  ClipboardList
+} from 'lucide-react';
 import { cleanSubjectName } from '../utils/matching';
+
+// Helper to convert numbers to words for packet covers
+const numberToWords = (num) => {
+  const a = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+  if (num === 0) return 'zero';
+  if (num < 20) return a[num];
+  const digit = num % 10;
+  if (num < 100) return b[Math.floor(num / 10)] + (digit ? '-' + a[digit] : '');
+  const hundred = Math.floor(num / 100);
+  const rest = num % 100;
+  return a[hundred] + ' hundred' + (rest !== 0 ? ' and ' + numberToWords(rest) : '');
+};
 
 const Reports = ({ institutions, registrations, timeTable, previousStudents = [] }) => {
   const [reportType, setReportType] = useState('office_summary');
@@ -29,21 +54,23 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
 
     const prevRegs = [];
     previousStudents.forEach(st => {
-      st.subjects.forEach(sub => {
-        const cleanedSub = cleanSubjectName(sub);
-        const inferredClass = st.class && st.class !== 'UNKNOWN CLASS' ? st.class : (subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS');
-        prevRegs.push({
-          uid: st.uid,
-          name: st.name,
-          class: `PREVIOUS EXAM / SAY (${inferredClass})`,
-          subject: sub,
-          school_code: st.school_code,
-          school_name: st.college,
-          district: st.zone,
-          zone: st.zone,
-          isSay: true
+      if (st.subjects) {
+        st.subjects.forEach(sub => {
+          const cleanedSub = cleanSubjectName(sub);
+          const inferredClass = st.class && st.class !== 'UNKNOWN CLASS' ? st.class : (subjectToClassMap[cleanedSub] || 'UNKNOWN CLASS');
+          prevRegs.push({
+            uid: st.uid,
+            name: st.name,
+            class: `PREVIOUS EXAM / SAY (${inferredClass})`,
+            subject: sub,
+            school_code: st.school_code,
+            school_name: st.college,
+            district: st.zone,
+            zone: st.zone,
+            isSay: true
+          });
         });
-      });
+      }
     });
     return [...registrations, ...prevRegs];
   }, [registrations, previousStudents]);
@@ -331,377 +358,1039 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
     return Object.values(groups);
   }, [seatingCandidates, institutions]);
 
+  // 8. Generate A3 envelope cover packets list
+  const packCoversData = useMemo(() => {
+    const slotsToProcess = selectedSlotId === 'all' 
+      ? timeTable 
+      : timeTable.filter(s => s.id === selectedSlotId);
+
+    const centersToProcess = selectedCenter === 'all'
+      ? examCenters
+      : examCenters.filter(ec => ec.code === selectedCenter);
+
+    const covers = [];
+
+    centersToProcess.forEach(center => {
+      slotsToProcess.forEach(slot => {
+        const scheduledSubjects = slot.subjects || [];
+
+        scheduledSubjects.forEach(subjectKey => {
+          // Get candidate count for this center, slot and subject
+          const count = combinedRegistrations.filter(r => {
+            const regCenterCode = schoolToCenterCode[r.school_code];
+            const matchKey = `${r.class}||${cleanSubjectName(r.subject)}`;
+            return regCenterCode === center.code && matchKey === subjectKey;
+          }).length;
+
+          if (count > 0) {
+            const parts = subjectKey.split('||');
+            const klass = parts[0] || 'UNKNOWN';
+            const subject = parts[1] || subjectKey;
+
+            covers.push({
+              centerCode: center.code,
+              centerName: center.name,
+              zoneName: center.zone || 'UNASSIGNED',
+              date: slot.date,
+              session: slot.session,
+              time: slot.time || (slot.session.includes('FN') ? fnTime : anTime),
+              class: klass,
+              subject: subject,
+              count: count
+            });
+          }
+        });
+      });
+    });
+
+    return covers;
+  }, [combinedRegistrations, timeTable, selectedSlotId, selectedCenter, examCenters, schoolToCenterCode, fnTime, anTime]);
+
   const handlePrint = () => {
     window.print();
   };
 
-  const selectedSlot = timeTable.find(s => s.id === selectedSlotId);
+  // Reports Explorer categories list definition
+  const reportsList = [
+    {
+      id: 'office_summary',
+      category: 'Office Summaries',
+      title: 'QP Print Requirements',
+      shortTitle: 'QP Print Summary',
+      description: 'Total printing requirements grouped by Class and Subject.',
+      icon: <FileText size={18} />
+    },
+    {
+      id: 'master_timetable',
+      category: 'Office Summaries',
+      title: 'Master Examination Timetable',
+      shortTitle: 'Master Timetable',
+      description: 'Unified calendar of all scheduled regular and previous SAY examinations.',
+      icon: <Calendar size={18} />
+    },
+    {
+      id: 'institution_enrollment',
+      category: 'Office Summaries',
+      title: 'Institution Enrollment Summary',
+      shortTitle: 'Enrollment Summary',
+      description: 'Paper registration and unique candidate counts per college.',
+      icon: <School size={18} />
+    },
+    {
+      id: 'center_packing',
+      category: 'Center Lists & Sheets',
+      title: 'Center Packing Counts',
+      shortTitle: 'Packing Sheets',
+      description: 'Envelope packing checklists with center-wise subject totals.',
+      icon: <Layers size={18} />
+    },
+    {
+      id: 'pack_cover',
+      category: 'Center Lists & Sheets',
+      title: 'A3 Envelope Pack Covers',
+      shortTitle: 'Pack Covers (A3)',
+      description: 'Individual A3 envelope covers with bold centered printing labels.',
+      icon: <Printer size={18} />
+    },
+    {
+      id: 'centre_exam_summary',
+      category: 'Center Lists & Sheets',
+      title: 'Centre Exam Schedule & Seating Summary',
+      shortTitle: 'Schedule & Seating',
+      description: 'Seating breakdowns and session schedules per exam center.',
+      icon: <Calendar size={18} />
+    },
+    {
+      id: 'center_list',
+      category: 'Center Lists & Sheets',
+      title: 'Center Allocation List',
+      shortTitle: 'Allocation List',
+      description: 'Official mapped list showing which colleges write at which centers.',
+      icon: <MapPin size={18} />
+    },
+    {
+      id: 'supervisor_list',
+      category: 'Center Lists & Sheets',
+      title: 'Supervisor by Center List',
+      shortTitle: 'Supervisor List',
+      description: 'Appointed exam supervisors and contacts by center.',
+      icon: <ShieldCheck size={18} />
+    },
+    {
+      id: 'attendance_register',
+      category: 'Conduct & Attendance',
+      title: 'Center Attendance Register',
+      shortTitle: 'Attendance Register',
+      description: 'Candidate signature sheets sorted subject-wise by Class.',
+      icon: <UserCheck size={18} />
+    },
+    {
+      id: 'desk_slips',
+      category: 'Conduct & Attendance',
+      title: 'Desk Slips & Seating Arrangement',
+      shortTitle: 'Desk Slips / Chart',
+      description: 'Printable desk slips (8/page) and flat room seating lists.',
+      icon: <ClipboardList size={18} />
+    }
+  ];
+
+  // Group report definitions by category
+  const groupedReports = useMemo(() => {
+    const groups = {};
+    reportsList.forEach(report => {
+      if (!groups[report.category]) {
+        groups[report.category] = [];
+      }
+      groups[report.category].push(report);
+    });
+    return groups;
+  }, []);
+
+  const activeReport = reportsList.find(r => r.id === reportType);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="reports-layout-container">
       
-      {/* Configuration Header */}
-      <div className="filter-bar no-print">
-        <div className="form-group">
-          <label>Select Report Type</label>
-          <select 
-            className="form-select"
-            value={reportType}
-            onChange={(e) => {
-              const val = e.target.value;
-              setReportType(val);
-              if (val === 'centre_exam_summary' || val === 'desk_slips') {
-                setSelectedCenter('all');
-              }
-              if (val === 'desk_slips') {
-                setSelectedSlotId('all');
-              }
-            }}
-          >
-            <option value="office_summary">Office Summary (Total Question Paper Print Counts)</option>
-            <option value="center_packing">Center Packing Counts (Envelop Packing Sheet)</option>
-            <option value="centre_exam_summary">Centre Exam Schedule & Seating Summary</option>
-            <option value="attendance_register">Center Attendance Register (Subject-wise by Class)</option>
-            <option value="desk_slips">Desk Slips & Seating Arrangement Chart</option>
-            <option value="center_list">Center Allocation List (For Publication to Principals)</option>
-            <option value="institution_enrollment">Institution Enrollment Summary (For Center Planning)</option>
-            <option value="supervisor_list">Supervisor by Center List (For Exam Control)</option>
-          </select>
-        </div>
-
-        {(reportType === 'center_packing' || reportType === 'centre_exam_summary') && (
-          <div className="form-group">
-            <label>Exam Center Filter</label>
-            <select
-              className="form-select"
-              value={selectedCenter}
-              onChange={(e) => setSelectedCenter(e.target.value)}
-            >
-              <option value="all">All Exam Centers (Sequential list)</option>
-              {examCenters.map(ec => (
-                <option key={ec.code} value={ec.code}>{ec.code} - {ec.name}</option>
+      {/* Reports Navigation Sidebar */}
+      <div className="reports-sidebar no-print">
+        <h3 className="sidebar-group-header">Available Reports</h3>
+        {Object.entries(groupedReports).map(([category, items]) => (
+          <div key={category} className="report-sidebar-group">
+            <h4 className="report-sidebar-group-title">{category}</h4>
+            <div className="report-sidebar-group-items">
+              {items.map(item => (
+                <button
+                  key={item.id}
+                  className={`report-sidebar-item-btn ${reportType === item.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setReportType(item.id);
+                    if (item.id === 'centre_exam_summary' || item.id === 'desk_slips' || item.id === 'pack_cover') {
+                      setSelectedCenter('all');
+                    }
+                    if (item.id === 'desk_slips' || item.id === 'pack_cover') {
+                      setSelectedSlotId('all');
+                    }
+                  }}
+                >
+                  <div className="report-sidebar-item-icon">{item.icon}</div>
+                  <div className="report-sidebar-item-info">
+                    <span className="report-sidebar-item-title">{item.shortTitle}</span>
+                    <span className="report-sidebar-item-desc">{item.description}</span>
+                  </div>
+                </button>
               ))}
-            </select>
+            </div>
           </div>
-        )}
-
-        {reportType === 'desk_slips' && (
-          <>
-            <div className="form-group">
-              <label>Select Exam Center</label>
-              <select
-                className="form-select"
-                value={selectedCenter}
-                onChange={(e) => setSelectedCenter(e.target.value)}
-              >
-                <option value="all">All Exam Centers (Sequential list)</option>
-                {examCenters.map(ec => (
-                  <option key={ec.code} value={ec.code}>{ec.code} - {ec.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>Select Exam Slot</label>
-              <select
-                className="form-select"
-                value={selectedSlotId}
-                onChange={(e) => setSelectedSlotId(e.target.value)}
-              >
-                <option value="all">All Exam Slots (Sequential list)</option>
-                {timeTable.map(slot => (
-                  <option key={slot.id} value={slot.id}>
-                    {new Date(slot.date).toLocaleDateString()} ({slot.session})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>View Mode</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  type="button"
-                  className={`btn ${deskSlipsViewMode === 'chart' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setDeskSlipsViewMode('chart')}
-                  style={{ padding: '8px 12px', fontSize: '13px', whiteSpace: 'nowrap', height: '42px' }}
-                >
-                  Seating Chart
-                </button>
-                <button 
-                  type="button"
-                  className={`btn ${deskSlipsViewMode === 'slips' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setDeskSlipsViewMode('slips')}
-                  style={{ padding: '8px 12px', fontSize: '13px', whiteSpace: 'nowrap', height: '42px' }}
-                >
-                  Desk Slips (8/Page)
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {reportType === 'attendance_register' && (
-          <>
-            <div className="form-group">
-              <label>Select Exam Center</label>
-              <select
-                className="form-select"
-                value={selectedCenter}
-                onChange={(e) => setSelectedCenter(e.target.value)}
-              >
-                {examCenters.map(ec => (
-                  <option key={ec.code} value={ec.code}>{ec.code} - {ec.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>Select Class</label>
-              <select
-                className="form-select"
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-              >
-                {classesList.map(cls => (
-                  <option key={cls} value={cls}>{cls}</option>
-                ))}
-                {classesList.length === 0 && <option value="">-- No Classes Found --</option>}
-              </select>
-            </div>
-          </>
-        )}
-
-        <button className="btn btn-primary" onClick={handlePrint} style={{ height: '42px', marginTop: 'auto' }}>
-          <Printer size={16} /> Print Report / Save PDF
-        </button>
+        ))}
       </div>
 
-      {/* Printable Report Paper */}
-      <div className="print-section">
+      {/* Main Reports Panel */}
+      <div className="reports-main-content">
         
-        {/* OFFICE SUMMARY REPORT */}
-        {reportType === 'office_summary' && (
-          <div className="theme-office">
-            <div className="print-report-header">
-              <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-              <h3>SAY & Improvement Examinations</h3>
-              <p>Office Summary Report - Question Paper Printing Requirements</p>
+        {/* Sub-Filters / Settings Card */}
+        <div className="reports-filter-panel card no-print">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--primary)' }}>
+                {activeReport?.title}
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                {activeReport?.description}
+              </p>
             </div>
+            <button className="btn btn-primary" onClick={handlePrint} style={{ height: '42px' }}>
+              <Printer size={16} /> Print Report / Save PDF
+            </button>
+          </div>
 
-            <div className="print-meta-grid">
-              <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-              <div className="meta-item">Total Subject Registers: <strong>{combinedRegistrations.length}</strong></div>
-              <div className="meta-item">Total Candidates: <strong>{new Set(combinedRegistrations.map(r=>r.uid)).size}</strong></div>
-              <div className="meta-item">Total Institutions: <strong>{institutions.length}</strong></div>
-            </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '4px' }}>
+            
+            {/* Center Filter */}
+            {(reportType === 'center_packing' || reportType === 'centre_exam_summary' || reportType === 'desk_slips' || reportType === 'pack_cover' || reportType === 'attendance_register') && (
+              <div className="form-group" style={{ flexGrow: 1, minWidth: '200px' }}>
+                <label>Exam Center</label>
+                <select
+                  className="form-select"
+                  value={selectedCenter}
+                  onChange={(e) => setSelectedCenter(e.target.value)}
+                >
+                  {/* Hide 'All' for Attendance Register */}
+                  {reportType !== 'attendance_register' && (
+                    <option value="all">All Exam Centers (Sequential pages)</option>
+                  )}
+                  {examCenters.map(ec => (
+                    <option key={ec.code} value={ec.code}>{ec.code} - {ec.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '80px', textAlign: 'center' }}>SL NO</th>
-                  <th style={{ textAlign: 'left' }}>Subject Name</th>
-                  <th style={{ width: '180px', textAlign: 'center' }}>Required Prints</th>
-                </tr>
-              </thead>
-              <tbody>
-                {officeSummaryByClass.map((classGroup) => (
-                  <React.Fragment key={classGroup.class}>
-                    <tr style={{ backgroundColor: '#e0e7ff' }}>
-                      <td colSpan="3" style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: '#1e40af', padding: '12px' }}>
-                        {classGroup.class}
-                      </td>
-                    </tr>
-                    {classGroup.subjects.map((item, idx) => (
-                      <tr key={`${classGroup.class}_${item.subject}`}>
-                        <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                        <td style={{ fontWeight: '700', fontSize: '15px', textAlign: 'left' }}>
-                          {item.subject}
-                        </td>
-                        <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--primary)' }}>
-                          {item.count}
+            {/* Exam Slot Filter */}
+            {(reportType === 'desk_slips' || reportType === 'pack_cover') && (
+              <div className="form-group" style={{ flexGrow: 1, minWidth: '200px' }}>
+                <label>Exam Slot</label>
+                <select
+                  className="form-select"
+                  value={selectedSlotId}
+                  onChange={(e) => setSelectedSlotId(e.target.value)}
+                >
+                  <option value="all">All Exam Slots (Sequential list)</option>
+                  {timeTable.map(slot => (
+                    <option key={slot.id} value={slot.id}>
+                      {new Date(slot.date).toLocaleDateString()} ({slot.session})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Attendance Register Class / Slot Filter */}
+            {reportType === 'attendance_register' && (
+              <>
+                <div className="form-group" style={{ flexGrow: 1, minWidth: '150px' }}>
+                  <label>Select Class</label>
+                  <select
+                    className="form-select"
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                  >
+                    {classesList.map(cls => (
+                      <option key={cls} value={cls}>{cls}</option>
+                    ))}
+                    {classesList.length === 0 && <option value="">-- No Classes Found --</option>}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {/* Desk Slips View Mode */}
+            {reportType === 'desk_slips' && (
+              <div className="form-group" style={{ minWidth: '180px' }}>
+                <label>View Mode</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    type="button"
+                    className={`btn ${deskSlipsViewMode === 'chart' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setDeskSlipsViewMode('chart')}
+                    style={{ padding: '8px 12px', fontSize: '13px', whiteSpace: 'nowrap', height: '42px', flexGrow: 1 }}
+                  >
+                    Seating Chart
+                  </button>
+                  <button 
+                    type="button"
+                    className={`btn ${deskSlipsViewMode === 'slips' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setDeskSlipsViewMode('slips')}
+                    style={{ padding: '8px 12px', fontSize: '13px', whiteSpace: 'nowrap', height: '42px', flexGrow: 1 }}
+                  >
+                    Desk Slips (8/Page)
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* Printable Report Panel */}
+        <div className="print-section">
+          
+          {/* 1. OFFICE SUMMARY REPORT */}
+          {reportType === 'office_summary' && (
+            <div className="theme-office">
+              <div className="print-report-header">
+                <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                <h3>SAY & Improvement Examinations</h3>
+                <p>Office Summary Report - Question Paper Printing Requirements</p>
+              </div>
+
+              <div className="print-meta-grid">
+                <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                <div className="meta-item">Total Subject Registers: <strong>{combinedRegistrations.length}</strong></div>
+                <div className="meta-item">Total Candidates: <strong>{new Set(combinedRegistrations.map(r=>r.uid)).size}</strong></div>
+                <div className="meta-item">Total Institutions: <strong>{institutions.length}</strong></div>
+              </div>
+
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '80px', textAlign: 'center' }}>SL NO</th>
+                    <th style={{ textAlign: 'left' }}>Subject Name</th>
+                    <th style={{ width: '180px', textAlign: 'center' }}>Required Prints</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {officeSummaryByClass.map((classGroup) => (
+                    <React.Fragment key={classGroup.class}>
+                      <tr style={{ backgroundColor: '#e0e7ff' }}>
+                        <td colSpan="3" style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: '#1e40af', padding: '12px' }}>
+                          {classGroup.class}
                         </td>
                       </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                      {classGroup.subjects.map((item, idx) => (
+                        <tr key={`${classGroup.class}_${item.subject}`}>
+                          <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                          <td style={{ fontWeight: '700', fontSize: '15px', textAlign: 'left' }}>
+                            {item.subject}
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--primary)' }}>
+                            {item.count}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
 
-            <div className="print-signatures">
-              <div className="sig-block">Prepared By</div>
-              <div className="sig-block">Checked By</div>
-              <div className="sig-block">Controller of Examinations</div>
+              <div className="print-signatures">
+                <div className="sig-block">Prepared By</div>
+                <div className="sig-block">Checked By</div>
+                <div className="sig-block">Controller of Examinations</div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* CENTER PACKING REPORT */}
-        {reportType === 'center_packing' && (
-          <div>
-            {selectedCenter === 'all' ? (
-              // Print all centers sequentially
-              Object.entries(centerPackingData).map(([cCode, cData], cIdx) => {
-                let totalPapers = 0;
-                Object.values(cData.classes).forEach(subs => {
-                  Object.values(subs).forEach(count => {
-                    totalPapers += count;
+          {/* MASTER TIMETABLE REPORT */}
+          {reportType === 'master_timetable' && (
+            <div className="theme-timetable-print">
+              <div className="print-report-header">
+                <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                <h3>SAY & Improvement Examinations</h3>
+                <p>Master Examination Timetable Schedule</p>
+              </div>
+
+              <div className="print-meta-grid">
+                <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                <div className="meta-item">Total Scheduled Slots: <strong>{timeTable.length}</strong></div>
+              </div>
+
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '180px', textAlign: 'center' }}>Date & Day</th>
+                    <th style={{ width: '150px', textAlign: 'center' }}>Session & Time</th>
+                    <th style={{ textAlign: 'left' }}>Regular Exam Subjects</th>
+                    <th style={{ textAlign: 'left' }}>Previous / SAY Exam Subjects</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...timeTable]
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .map((slot) => {
+                      const regularSubs = [];
+                      const saySubs = [];
+
+                      if (slot.subjects) {
+                        slot.subjects.forEach(subKey => {
+                          const parts = subKey.split('||');
+                          const klass = parts[0] || '';
+                          const subName = parts[1] || subKey;
+
+                          if (klass.startsWith('PREVIOUS EXAM / SAY')) {
+                            const innerClass = klass.match(/\((.*?)\)/)?.[1] || 'SAY';
+                            saySubs.push(`${subName} (${innerClass})`);
+                          } else {
+                            regularSubs.push(`${subName} (${klass})`);
+                          }
+                        });
+                      }
+
+                      return (
+                        <tr key={slot.id}>
+                          <td style={{ textAlign: 'center', fontWeight: '800' }}>
+                            <div>{new Date(slot.date).toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              {new Date(slot.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <div style={{ fontWeight: '700' }}>{slot.session}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              {slot.time || (slot.session.includes('FN') ? fnTime : anTime)}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {regularSubs.map(sub => (
+                                <span key={sub} style={{ fontWeight: '600' }}>• {sub}</span>
+                              ))}
+                              {regularSubs.length === 0 && (
+                                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '12px' }}>No regular exams</span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {saySubs.map(sub => (
+                                <span key={sub} style={{ fontWeight: '600', color: 'var(--primary)' }}>• {sub}</span>
+                              ))}
+                              {saySubs.length === 0 && (
+                                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '12px' }}>No previous/SAY exams</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {timeTable.length === 0 && (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: 'center', padding: '24px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                        No examination slots scheduled.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              <div className="print-signatures" style={{ marginTop: '50px' }}>
+                <div className="sig-block">Prepared By</div>
+                <div className="sig-block">Checked By</div>
+                <div className="sig-block">Controller of Examinations</div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. CENTER PACKING REPORT */}
+          {reportType === 'center_packing' && (
+            <div>
+              {selectedCenter === 'all' ? (
+                // Print all centers sequentially
+                Object.entries(centerPackingData).map(([cCode, cData], cIdx) => {
+                  let totalPapers = 0;
+                  Object.values(cData.classes).forEach(subs => {
+                    Object.values(subs).forEach(count => {
+                      totalPapers += count;
+                    });
+                  });
+                  const isLastCenter = cIdx === Object.keys(centerPackingData).length - 1;
+                  
+                  return (
+                    <div key={cCode} className={`theme-packing ${isLastCenter ? '' : 'page-break-after'}`} style={{ marginBottom: '40px' }}>
+                      <div className="print-report-header">
+                        <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                        <h3>Question Paper Packing Sheet</h3>
+                        <p>Center-wise Subject Counts</p>
+                      </div>
+
+                      <div className="print-meta-grid">
+                        <div className="meta-item">Center Name: <strong>{cData.name} ({cCode})</strong></div>
+                        <div className="meta-item">Place: <strong>{cData.place}</strong></div>
+                        <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                        <div className="meta-item">Total Packets (Papers): <strong>{totalPapers}</strong></div>
+                      </div>
+
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '80px' }}>SL NO</th>
+                            <th style={{ textAlign: 'left' }}>Subject Name</th>
+                            <th style={{ width: '150px', textAlign: 'center' }}>Total Papers Required</th>
+                            <th style={{ width: '150px' }}>Packed Status (Tick)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(cData.classes).map(([klass, subjectsObj]) => (
+                            <React.Fragment key={klass}>
+                              <tr style={{ backgroundColor: '#fef3c7' }}>
+                                <td colSpan="4" style={{ textAlign: 'center', fontWeight: '800', color: '#b45309', padding: '10px' }}>{klass}</td>
+                              </tr>
+                              {Object.entries(subjectsObj).map(([subject, count], idx) => (
+                                <tr key={subject}>
+                                  <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                  <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
+                                  <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--warning)' }}>{count}</td>
+                                  <td style={{ textAlign: 'center' }}>[ &nbsp; ]</td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          ))}
+                          {Object.keys(cData.classes).length === 0 && (
+                            <tr>
+                              <td colSpan="4" style={{ textAlign: 'center', fontStyle: 'italic', padding: '24px' }}>
+                                No candidate registrations are assigned to write at this center.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+
+                      <div className="print-signatures">
+                        <div className="sig-block">Packing Clerk</div>
+                        <div className="sig-block">Verified By (Superintendent)</div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                // Print single center
+                (() => {
+                  const cData = centerPackingData[selectedCenter];
+                  if (!cData) return <div>No center found</div>;
+                  let totalPapers = 0;
+                  Object.values(cData.classes).forEach(subs => {
+                    Object.values(subs).forEach(count => {
+                      totalPapers += count;
+                    });
+                  });
+
+                  return (
+                    <div className="theme-packing">
+                      <div className="print-report-header">
+                        <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                        <h3>Question Paper Packing Sheet</h3>
+                        <p>Center-wise Subject Counts</p>
+                      </div>
+
+                      <div className="print-meta-grid">
+                        <div className="meta-item">Center Name: <strong>{cData.name} ({selectedCenter})</strong></div>
+                        <div className="meta-item">Place: <strong>{cData.place}</strong></div>
+                        <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                        <div className="meta-item">Total Packets (Papers): <strong>{totalPapers}</strong></div>
+                      </div>
+
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '80px' }}>SL NO</th>
+                            <th style={{ textAlign: 'left' }}>Subject Name</th>
+                            <th style={{ width: '150px', textAlign: 'center' }}>Total Papers Required</th>
+                            <th style={{ width: '150px' }}>Packed Status (Tick)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(cData.classes).map(([klass, subjectsObj]) => (
+                            <React.Fragment key={klass}>
+                              <tr style={{ backgroundColor: '#fef3c7' }}>
+                                <td colSpan="4" style={{ textAlign: 'center', fontWeight: '800', color: '#b45309', padding: '10px' }}>{klass}</td>
+                              </tr>
+                              {Object.entries(subjectsObj).map(([subject, count], idx) => (
+                                <tr key={subject}>
+                                  <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                  <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
+                                  <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--warning)' }}>{count}</td>
+                                  <td style={{ textAlign: 'center' }}>[ &nbsp; ]</td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          ))}
+                          {Object.keys(cData.classes).length === 0 && (
+                            <tr>
+                              <td colSpan="4" style={{ textAlign: 'center', fontStyle: 'italic', padding: '24px' }}>
+                                No candidate registrations are assigned to write at this center.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+
+                      <div className="print-signatures">
+                        <div className="sig-block">Packing Clerk</div>
+                        <div className="sig-block">Verified By (Superintendent)</div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          )}
+
+          {/* 3. QUESTION PAPER PACK COVERS (A3 ENVELOPE) */}
+          {reportType === 'pack_cover' && (
+            <div className="theme-pack-cover">
+              {packCoversData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+                  <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>No question paper packets generated for the selected Center & Slot.</h4>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Verify that the slot contains scheduled subjects and registrations exist at this center.</p>
+                </div>
+              ) : (
+                packCoversData.map((cover, idx) => {
+                  const isLastCover = idx === packCoversData.length - 1;
+                  let displayClass = cover.class;
+                  if (cover.class.startsWith('PREVIOUS EXAM / SAY')) {
+                    const innerClass = cover.class.match(/\((.*?)\)/)?.[1] || 'SAY';
+                    displayClass = `PREVIOUS SAY (${innerClass})`;
+                  }
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`pack-cover-page ${isLastCover ? '' : 'page-break-after'}`}
+                    >
+                      <div className="pack-cover-inner">
+                        <div className="pack-cover-header">
+                          <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                          <h3>SAY & Improvement Examinations</h3>
+                          <div className="pack-cover-badge-top">QUESTION PAPER PACKET COVER</div>
+                        </div>
+
+                        <div className="pack-cover-body">
+                          <div className="pack-cover-meta-grid">
+                            <div className="meta-row">
+                              <span className="meta-label">EXAM CENTER</span>
+                              <span className="meta-value bold">[{cover.centerCode}] {cover.centerName}</span>
+                            </div>
+                            <div className="meta-row">
+                              <span className="meta-label">ZONE</span>
+                              <span className="meta-value bold">{cover.zoneName}</span>
+                            </div>
+                            <div className="meta-row-split">
+                              <div className="meta-row">
+                                <span className="meta-label">EXAM DATE & SESSION</span>
+                                <span className="meta-value bold">
+                                  {new Date(cover.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                  <span className="session-tag-highlight"> ({cover.session})</span>
+                                </span>
+                              </div>
+                              <div className="meta-row">
+                                <span className="meta-label">EXAM TIME</span>
+                                <span className="meta-value bold">{cover.time}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pack-cover-subject-box">
+                            <div className="sub-field">
+                              <span className="sub-label">CLASS / PROGRAM</span>
+                              <span className="sub-value class-highlight">{displayClass}</span>
+                            </div>
+                            <div className="sub-field">
+                              <span className="sub-label">SUBJECT</span>
+                              <span className="sub-value subject-highlight" dir="rtl">{cover.subject}</span>
+                            </div>
+                          </div>
+
+                          <div className="pack-cover-count-container">
+                            <div className="count-label">TOTAL QUESTION PAPERS ENCLOSED</div>
+                            <div className="count-badge-large">{cover.count}</div>
+                            <div className="count-words">
+                              (In Words: <strong>{numberToWords(cover.count).toUpperCase()} ONLY</strong>)
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pack-cover-footer">
+                          <div className="signature-section">
+                            <div className="sig-line">
+                              <span>___________________________</span>
+                              <strong>PACKING CLERK</strong>
+                            </div>
+                            <div className="sig-line">
+                              <span>___________________________</span>
+                              <strong>CHIEF SUPERINTENDENT</strong>
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(Seal & Signature)</span>
+                            </div>
+                          </div>
+                          <div className="seal-box">
+                            OFFICE SEAL
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* 4. CENTRE EXAM SCHEDULE & SEATING SUMMARY */}
+          {reportType === 'centre_exam_summary' && (
+            <div className="theme-schedule">
+              <div className="print-report-header">
+                <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                <h3>SAY & Improvement Examinations</h3>
+                <p>Centre Exam Schedule & Seating Summary</p>
+              </div>
+
+              <div className="print-meta-grid">
+                <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                <div className="meta-item">Total Exam Centers: <strong>{examCenters.length}</strong></div>
+                <div className="meta-item">Timetable Slots: <strong>{timeTable.length}</strong></div>
+                <div className="meta-item">Total Paper Registrations: <strong>{registrations.length}</strong></div>
+              </div>
+
+              {centreExamSummaryData
+                .filter(center => selectedCenter === 'all' || center.centerCode === selectedCenter)
+                .map((center, cIdx, filteredArr) => {
+                  const totalCandidatesForCenter = center.slots.reduce((sum, s) => sum + s.totalCount, 0);
+                  const isLastCenter = cIdx === filteredArr.length - 1;
+                  
+                  return (
+                    <div key={center.centerCode} className={isLastCenter ? '' : 'page-break-after'} style={{ marginBottom: '40px' }}>
+                      <h4 style={{ 
+                        backgroundColor: 'var(--primary-light)', 
+                        color: 'var(--primary)', 
+                        padding: '10px 16px', 
+                        borderRadius: 'var(--radius-sm)', 
+                        marginBottom: '12px',
+                        borderLeft: '4px solid var(--primary)',
+                        fontSize: '16px',
+                        fontWeight: '800',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span>CENTER: [{center.centerCode}] {center.centerName}, {center.place}</span>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                          Total Seat Allocations: {totalCandidatesForCenter}
+                        </span>
+                      </h4>
+
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '150px', textAlign: 'center' }}>Date & Session</th>
+                            <th style={{ width: '180px', textAlign: 'center' }}>Time Slot</th>
+                            <th style={{ textAlign: 'left' }}>Subject-wise Allocation Breakdown</th>
+                            <th style={{ width: '140px', textAlign: 'center' }}>Total Attending</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {center.slots.map(slot => (
+                            <tr key={slot.slotId}>
+                              <td style={{ textAlign: 'center', fontWeight: '600' }}>
+                                <div>{new Date(slot.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{slot.session}</div>
+                              </td>
+                              <td style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
+                                {slot.time}
+                              </td>
+                              <td style={{ textAlign: 'left' }}>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                  {slot.subjects.map(sub => (
+                                    <span key={sub.subject} className="badge badge-neutral" style={{ fontSize: '11px', padding: '4px 8px' }}>
+                                      {sub.subject}: <strong>{sub.count}</strong>
+                                      {sub.sayCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: '6px', fontWeight: '800' }}>[SAY: {sub.sayCount}]</span>}
+                                    </span>
+                                  ))}
+                                  {slot.subjects.length === 0 && (
+                                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '12px' }}>
+                                      No exams scheduled / no students assigned
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '15px', color: slot.totalCount > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
+                                {slot.totalCount}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+
+              <div className="print-signatures">
+                <div className="sig-block">Prepared By</div>
+                <div className="sig-block">Checked By</div>
+                <div className="sig-block">Controller of Examinations</div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. ATTENDANCE REGISTER */}
+          {reportType === 'attendance_register' && (
+            <div className="theme-attendance">
+              {(() => {
+                const centerObj = institutions.find(i => i.code === selectedCenter);
+                
+                // Filter subjects in class that have students registered at this center
+                const activeSubjects = subjectsInClass.filter(subject => {
+                  return combinedRegistrations.some(r => {
+                    const regCenterCode = schoolToCenterCode[r.school_code];
+                    return regCenterCode === selectedCenter && r.class === selectedClass && cleanSubjectName(r.subject) === subject;
                   });
                 });
-                
+
                 return (
-                  <div key={cCode} className="theme-packing page-break-after" style={{ marginBottom: '40px' }}>
-                    <div className="print-report-header">
-                      <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-                      <h3>Question Paper Packing Sheet</h3>
-                      <p>Center-wise Subject Counts</p>
-                    </div>
+                  <div>
+                    {activeSubjects.map((subject, sIdx) => {
+                      const subjectAttendance = combinedRegistrations.filter(r => {
+                        const regCenterCode = schoolToCenterCode[r.school_code];
+                        return regCenterCode === selectedCenter && r.class === selectedClass && cleanSubjectName(r.subject) === subject;
+                      }).sort((a, b) => a.name.localeCompare(b.name));
 
-                    <div className="print-meta-grid">
-                      <div className="meta-item">Center Name: <strong>{cData.name} ({cCode})</strong></div>
-                      <div className="meta-item">Place: <strong>{cData.place}</strong></div>
-                      <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-                      <div className="meta-item">Total Packets (Papers): <strong>{totalPapers}</strong></div>
-                    </div>
+                      const slot = timeTable.find(s => s.subjects && s.subjects.some(slotSub => {
+                        const parts = slotSub.split('||');
+                        const subName = parts.length > 1 ? parts[1] : slotSub;
+                        return cleanSubjectName(subName) === subject;
+                      }));
+                      const isLastSubject = sIdx === activeSubjects.length - 1;
 
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: '80px' }}>SL NO</th>
-                          <th style={{ textAlign: 'left' }}>Subject Name</th>
-                          <th style={{ width: '150px', textAlign: 'center' }}>Total Papers Required</th>
-                          <th style={{ width: '150px' }}>Packed Status (Tick)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(cData.classes).map(([klass, subjectsObj]) => (
-                          <React.Fragment key={klass}>
-                            <tr style={{ backgroundColor: '#fef3c7' }}>
-                              <td colSpan="4" style={{ textAlign: 'center', fontWeight: '800', color: '#b45309', padding: '10px' }}>{klass}</td>
-                            </tr>
-                            {Object.entries(subjectsObj).map(([subject, count], idx) => (
-                              <tr key={subject}>
-                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                                <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
-                                <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--warning)' }}>{count}</td>
-                                <td style={{ textAlign: 'center' }}>[ &nbsp; ]</td>
+                      return (
+                        <div key={subject} className={isLastSubject ? '' : 'page-break-after'} style={{ marginBottom: '40px' }}>
+                          <div className="print-report-header">
+                            <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                            <h3>SAY & Improvement Examinations</h3>
+                            <p>Exam Attendance Register (Subject-wise)</p>
+                          </div>
+
+                          <div className="print-meta-grid">
+                            <div className="meta-item">Exam Center: <strong>{centerObj?.name} ({selectedCenter})</strong></div>
+                            <div className="meta-item">Place: <strong>{centerObj?.place}</strong></div>
+                            <div className="meta-item">Class: <strong>{selectedClass}</strong></div>
+                            <div className="meta-item">Subject: <strong>{subject}</strong></div>
+                            
+                            {slot ? (
+                              <>
+                                <div className="meta-item">Exam Date: <strong>{new Date(slot.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></div>
+                                <div className="meta-item">Session: <strong>{slot.session} ({slot.time || (slot.session.includes('FN') ? fnTime : anTime)})</strong></div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="meta-item">Exam Date: <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>Not Scheduled yet</span></div>
+                                <div className="meta-item">Session: <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>Not Scheduled yet</span></div>
+                              </>
+                            )}
+                            <div className="meta-item">Total Candidates: <strong>{subjectAttendance.length}</strong></div>
+                          </div>
+
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th style={{ width: '50px', textAlign: 'center' }}>SL</th>
+                                <th style={{ width: '100px' }}>Student UID</th>
+                                <th style={{ textAlign: 'left' }}>Student Name</th>
+                                <th style={{ width: '80px', textAlign: 'center' }}>Class</th>
+                                <th style={{ textAlign: 'left' }}>College Name</th>
+                                <th style={{ width: '150px' }}>Candidate Signature</th>
                               </tr>
-                            ))}
-                          </React.Fragment>
-                        ))}
-                        {Object.keys(cData.classes).length === 0 && (
-                          <tr>
-                            <td colSpan="4" style={{ textAlign: 'center', fontStyle: 'italic', padding: '24px' }}>
-                              No candidate registrations are assigned to write at this center.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                              {subjectAttendance.map((reg, idx) => (
+                                <tr key={idx}>
+                                  <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                  <td><code>{reg.uid}</code></td>
+                                  <td style={{ fontWeight: '700', textAlign: 'left' }}>{reg.name}</td>
+                                  <td style={{ textAlign: 'center' }}><span className="badge badge-neutral" style={{ fontSize: '10px' }}>{reg.class}</span></td>
+                                  <td style={{ textAlign: 'left' }}>{reg.school_name}</td>
+                                  <td style={{ height: '35px' }}></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
 
-                    <div className="print-signatures">
-                      <div className="sig-block">Packing Clerk</div>
-                      <div className="sig-block">Verified By (Superintendent)</div>
-                    </div>
+                          <div className="print-signatures" style={{ marginTop: '80px' }}>
+                            <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Invigilator Name & Sig.</div>
+                            <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Chief Superintendent (Seal & Sig.)</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {activeSubjects.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+                        <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>No candidates found for Class {selectedClass} at this center.</h4>
+                        <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Try selecting a different exam center or class.</p>
+                      </div>
+                    )}
                   </div>
                 );
-              })
-            ) : (
-              // Print single center
-              (() => {
-                const cData = centerPackingData[selectedCenter];
-                if (!cData) return <div>No center found</div>;
-                let totalPapers = 0;
-                Object.values(cData.classes).forEach(subs => {
-                  Object.values(subs).forEach(count => {
-                    totalPapers += count;
-                  });
-                });
+              })()}
+            </div>
+          )}
 
-                return (
-                  <div className="theme-packing">
-                    <div className="print-report-header">
-                      <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-                      <h3>Question Paper Packing Sheet</h3>
-                      <p>Center-wise Subject Counts</p>
-                    </div>
+          {/* 6. CENTER ALLOCATION LIST */}
+          {reportType === 'center_list' && (
+            <div className="theme-allocation">
+              <div className="print-report-header">
+                <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                <h3>SAY & Improvement Examinations</h3>
+                <p>Exam Center Allocation List (For Publication to Principals)</p>
+              </div>
 
-                    <div className="print-meta-grid">
-                      <div className="meta-item">Center Name: <strong>{cData.name} ({selectedCenter})</strong></div>
-                      <div className="meta-item">Place: <strong>{cData.place}</strong></div>
-                      <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-                      <div className="meta-item">Total Packets (Papers): <strong>{totalPapers}</strong></div>
-                    </div>
+              <div className="print-meta-grid">
+                <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                <div className="meta-item">Total Institutions: <strong>{institutions.length}</strong></div>
+                <div className="meta-item">Designated Centers: <strong>{examCenters.length}</strong></div>
+                <div className="meta-item">Unassigned Colleges: <strong style={{ color: institutions.filter(i => !i.isExamCenter && !i.assignedToCenter).length > 0 ? 'var(--danger)' : 'var(--success)' }}>{institutions.filter(i => !i.isExamCenter && !i.assignedToCenter).length}</strong></div>
+              </div>
 
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: '80px' }}>SL NO</th>
-                          <th style={{ textAlign: 'left' }}>Subject Name</th>
-                          <th style={{ width: '150px', textAlign: 'center' }}>Total Papers Required</th>
-                          <th style={{ width: '150px' }}>Packed Status (Tick)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(cData.classes).map(([klass, subjectsObj]) => (
-                          <React.Fragment key={klass}>
-                            <tr style={{ backgroundColor: '#fef3c7' }}>
-                              <td colSpan="4" style={{ textAlign: 'center', fontWeight: '800', color: '#b45309', padding: '10px' }}>{klass}</td>
-                            </tr>
-                            {Object.entries(subjectsObj).map(([subject, count], idx) => (
-                              <tr key={subject}>
-                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                                <td style={{ fontWeight: '700', textAlign: 'left' }}>{subject}</td>
-                                <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '16px', color: 'var(--warning)' }}>{count}</td>
-                                <td style={{ textAlign: 'center' }}>[ &nbsp; ]</td>
-                              </tr>
-                            ))}
-                          </React.Fragment>
-                        ))}
-                        {Object.keys(cData.classes).length === 0 && (
-                          <tr>
-                            <td colSpan="4" style={{ textAlign: 'center', fontStyle: 'italic', padding: '24px' }}>
-                              No candidate registrations are assigned to write at this center.
+              {institutionsByZone.map(({ zone, institutions: zoneInsts }) => (
+                <div key={zone} style={{ breakInside: 'avoid', pageBreakInside: 'avoid', marginBottom: '32px' }}>
+                  <h4 style={{ 
+                    backgroundColor: 'var(--primary-light)', 
+                    color: 'var(--primary)', 
+                    padding: '10px 16px', 
+                    borderRadius: 'var(--radius-sm)', 
+                    marginBottom: '12px',
+                    borderLeft: '4px solid var(--primary)',
+                    fontSize: '16px',
+                    fontWeight: '800'
+                  }}>
+                    ZONE: {zone} ({zoneInsts.length} Colleges)
+                  </h4>
+
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
+                        <th style={{ width: '80px' }}>CODE</th>
+                        <th style={{ textAlign: 'left' }}>COLLEGE NAME & PLACE</th>
+                        <th style={{ width: '120px', textAlign: 'center' }}>CANDIDATES</th>
+                        <th style={{ textAlign: 'left' }}>ASSIGNED EXAM CENTER</th>
+                        <th style={{ width: '150px', textAlign: 'center' }}>CENTER STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {zoneInsts.map((inst, idx) => {
+                        const studentCount = new Set(combinedRegistrations.filter(r => r.school_code === inst.code).map(r => r.uid)).size;
+                        const paperCount = combinedRegistrations.filter(r => r.school_code === inst.code).length;
+                        
+                        // Center details
+                        let centerDisplay = '';
+                        let statusBadge = null;
+
+                        if (inst.isExamCenter) {
+                          centerDisplay = 'SELF CENTER';
+                          statusBadge = <span className="badge badge-success">SELF CENTER</span>;
+                        } else if (inst.assignedToCenter) {
+                          const center = institutions.find(i => i.code === inst.assignedToCenter);
+                          if (center) {
+                            centerDisplay = `[${center.code}] {center.name}, {center.place}`;
+                            statusBadge = <span className="badge badge-neutral">MAPPED</span>;
+                          } else {
+                            centerDisplay = `[${inst.assignedToCenter}] (Center Details Missing)`;
+                            statusBadge = <span className="badge badge-warning">MAPPED (MISSING)</span>;
+                          }
+                        } else {
+                          centerDisplay = 'NOT ASSIGNED';
+                          statusBadge = <span className="badge badge-danger">UNASSIGNED</span>;
+                        }
+
+                        return (
+                          <tr key={inst.code}>
+                            <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                            <td style={{ fontWeight: '600' }}><code>{inst.code}</code></td>
+                            <td style={{ textAlign: 'left' }}>
+                              <div style={{ fontWeight: '700' }}>{inst.name}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{inst.place} | {inst.district}</div>
+                            </td>
+                            <td style={{ textAlign: 'center', fontSize: '13px' }}>
+                              {studentCount > 0 ? (
+                                <span><strong>{studentCount}</strong> std <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>({paperCount} papers)</span></span>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>0 std</span>
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'left', fontWeight: inst.isExamCenter ? '600' : '400' }}>
+                              {inst.isExamCenter ? (
+                                <span style={{ color: 'var(--success)', fontWeight: '700' }}>{centerDisplay}</span>
+                              ) : inst.assignedToCenter ? (
+                                <span>{centerDisplay}</span>
+                              ) : (
+                                <span style={{ color: 'var(--danger)', fontWeight: '700' }}>{centerDisplay}</span>
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {statusBadge}
                             </td>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
 
-                    <div className="print-signatures">
-                      <div className="sig-block">Packing Clerk</div>
-                      <div className="sig-block">Verified By (Superintendent)</div>
-                    </div>
-                  </div>
-                );
-              })()
-            )}
-          </div>
-        )}
-
-        {/* CENTRE EXAM SCHEDULE & SEATING SUMMARY */}
-        {reportType === 'centre_exam_summary' && (
-          <div className="theme-schedule">
-            <div className="print-report-header">
-              <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-              <h3>SAY & Improvement Examinations</h3>
-              <p>Centre Exam Schedule & Seating Summary</p>
+              <div className="print-signatures" style={{ marginTop: '50px' }}>
+                <div className="sig-block">Prepared By</div>
+                <div className="sig-block">Checked By</div>
+                <div className="sig-block">Controller of Examinations</div>
+              </div>
             </div>
+          )}
 
-            <div className="print-meta-grid">
-              <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-              <div className="meta-item">Total Exam Centers: <strong>{examCenters.length}</strong></div>
-              <div className="meta-item">Timetable Slots: <strong>{timeTable.length}</strong></div>
-              <div className="meta-item">Total Paper Registrations: <strong>{registrations.length}</strong></div>
-            </div>
+          {/* 7. INSTITUTION ENROLLMENT SUMMARY */}
+          {reportType === 'institution_enrollment' && (
+            <div className="theme-enrollment">
+              <div className="print-report-header">
+                <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                <h3>SAY & Improvement Examinations</h3>
+                <p>Institution Enrollment Summary - For Center Planning & Allocation</p>
+              </div>
 
-            {centreExamSummaryData
-              .filter(center => selectedCenter === 'all' || center.centerCode === selectedCenter)
-              .map(center => {
-                const totalCandidatesForCenter = center.slots.reduce((sum, s) => sum + s.totalCount, 0);
-                
+              <div className="print-meta-grid">
+                <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                <div className="meta-item">Total Institutions: <strong>{institutions.length}</strong></div>
+                <div className="meta-item">Total Candidates: <strong>{new Set(combinedRegistrations.map(r=>r.uid)).size}</strong></div>
+                <div className="meta-item">Total Paper Registrations: <strong>{combinedRegistrations.length}</strong></div>
+              </div>
+
+              {institutionsByZone.map(({ zone, institutions: zoneInsts }) => {
+                // Calculate unique student count and paper registrations for this zone
+                const zoneSchoolCodes = new Set(zoneInsts.map(i => i.code));
+                const zoneUniqueCandidates = new Set(
+                  combinedRegistrations
+                    .filter(r => zoneSchoolCodes.has(r.school_code))
+                    .map(r => r.uid)
+                ).size;
+                const zoneTotalPapers = combinedRegistrations
+                  .filter(r => zoneSchoolCodes.has(r.school_code))
+                  .length;
+
                 return (
-                  <div key={center.centerCode} className="page-break-after" style={{ marginBottom: '40px' }}>
+                  <div key={zone} style={{ breakInside: 'avoid', pageBreakInside: 'avoid', marginBottom: '32px' }}>
                     <h4 style={{ 
                       backgroundColor: 'var(--primary-light)', 
                       color: 'var(--primary)', 
@@ -715,627 +1404,320 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
                       justifyContent: 'space-between',
                       alignItems: 'center'
                     }}>
-                      <span>CENTER: [{center.centerCode}] {center.centerName}, {center.place}</span>
+                      <span>ZONE: {zone} ({zoneInsts.length} Colleges)</span>
                       <span style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                        Total Seat Allocations: {totalCandidatesForCenter}
+                        Zone Candidates: {zoneUniqueCandidates} std ({zoneTotalPapers} papers)
                       </span>
                     </h4>
 
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th style={{ width: '150px', textAlign: 'center' }}>Date & Session</th>
-                          <th style={{ width: '180px', textAlign: 'center' }}>Time Slot</th>
-                          <th style={{ textAlign: 'left' }}>Subject-wise Allocation Breakdown</th>
-                          <th style={{ width: '140px', textAlign: 'center' }}>Total Attending</th>
+                          <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
+                          <th style={{ width: '80px' }}>CODE</th>
+                          <th style={{ textAlign: 'left' }}>COLLEGE NAME & PLACE</th>
+                          <th style={{ width: '120px', textAlign: 'center' }}>DISTRICT</th>
+                          <th style={{ width: '150px', textAlign: 'center' }}>UNIQUE CANDIDATES</th>
+                          <th style={{ width: '150px', textAlign: 'center' }}>PAPER REGISTRATIONS</th>
+                          <th style={{ textAlign: 'left' }}>CENTER STATUS</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {center.slots.map(slot => (
-                          <tr key={slot.slotId}>
-                            <td style={{ textAlign: 'center', fontWeight: '600' }}>
-                              <div>{new Date(slot.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{slot.session}</div>
-                            </td>
-                            <td style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
-                              {slot.time}
-                            </td>
-                            <td style={{ textAlign: 'left' }}>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {slot.subjects.map(sub => (
-                                  <span key={sub.subject} className="badge badge-neutral" style={{ fontSize: '11px', padding: '4px 8px' }}>
-                                    {sub.subject}: <strong>{sub.count}</strong>
-                                    {sub.sayCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: '6px', fontWeight: '800' }}>[SAY: {sub.sayCount}]</span>}
-                                  </span>
-                                ))}
-                                {slot.subjects.length === 0 && (
-                                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '12px' }}>
-                                    No exams scheduled / no students assigned
-                                  </span>
+                        {zoneInsts.map((inst, idx) => {
+                          const studentCount = new Set(combinedRegistrations.filter(r => r.school_code === inst.code).map(r => r.uid)).size;
+                          const paperCount = combinedRegistrations.filter(r => r.school_code === inst.code).length;
+                          
+                          let centerDisplay = '';
+                          if (inst.isExamCenter) {
+                            centerDisplay = 'SELF CENTER';
+                          } else if (inst.assignedToCenter) {
+                            const center = institutions.find(i => i.code === inst.assignedToCenter);
+                            centerDisplay = center ? `MAPPED TO: [${center.code}] ${center.name}` : `MAPPED TO: ${inst.assignedToCenter}`;
+                          } else {
+                            centerDisplay = 'UNASSIGNED';
+                          }
+
+                          return (
+                            <tr key={inst.code}>
+                              <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                              <td style={{ fontWeight: '600' }}><code>{inst.code}</code></td>
+                              <td style={{ textAlign: 'left' }}>
+                                <div style={{ fontWeight: '700' }}>{inst.name}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{inst.place}</div>
+                              </td>
+                              <td style={{ textAlign: 'center' }}>{inst.district}</td>
+                              <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '14px', color: studentCount > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
+                                {studentCount}
+                              </td>
+                              <td style={{ textAlign: 'center', fontWeight: '600', color: paperCount > 0 ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                                {paperCount}
+                              </td>
+                              <td style={{ textAlign: 'left' }}>
+                                {inst.isExamCenter ? (
+                                  <span className="badge badge-success" style={{ fontWeight: 'bold' }}>{centerDisplay}</span>
+                                ) : inst.assignedToCenter ? (
+                                  <span className="badge badge-neutral">{centerDisplay}</span>
+                                ) : (
+                                  <span className="badge badge-danger" style={{ fontWeight: 'bold' }}>{centerDisplay}</span>
                                 )}
-                              </div>
-                            </td>
-                            <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '15px', color: slot.totalCount > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
-                              {slot.totalCount}
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                 );
               })}
 
-            <div className="print-signatures">
-              <div className="sig-block">Prepared By</div>
-              <div className="sig-block">Checked By</div>
-              <div className="sig-block">Controller of Examinations</div>
+              <div className="print-signatures" style={{ marginTop: '50px' }}>
+                <div className="sig-block">Prepared By</div>
+                <div className="sig-block">Checked By</div>
+                <div className="sig-block">Controller of Examinations</div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ATTENDANCE REGISTER */}
-        {reportType === 'attendance_register' && (
-          <div className="theme-attendance">
-            {(() => {
-              const centerObj = institutions.find(i => i.code === selectedCenter);
-              
-              // Filter subjects in class that have students registered at this center
-              const activeSubjects = subjectsInClass.filter(subject => {
-                return registrations.some(r => {
-                  const regCenterCode = schoolToCenterCode[r.school_code];
-                  return regCenterCode === selectedCenter && r.class === selectedClass && cleanSubjectName(r.subject) === subject;
-                });
-              });
+          {/* 8. SUPERVISOR LIST */}
+          {reportType === 'supervisor_list' && (
+            <div className="theme-supervisor">
+              <div className="print-report-header">
+                <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                <h3>SAY & Improvement Examinations</h3>
+                <p>Supervisor by Center List (For Exam Control)</p>
+              </div>
 
-              return (
-                <div>
-                  {activeSubjects.map((subject, sIdx) => {
-                    const subjectAttendance = registrations.filter(r => {
-                      const regCenterCode = schoolToCenterCode[r.school_code];
-                      return regCenterCode === selectedCenter && r.class === selectedClass && cleanSubjectName(r.subject) === subject;
-                    }).sort((a, b) => a.name.localeCompare(b.name));
+              <div className="print-meta-grid">
+                <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
+                <div className="meta-item">Total Exam Centers: <strong>{examCenters.length}</strong></div>
+              </div>
 
-                    const slot = timeTable.find(s => s.subjects.map(sub => cleanSubjectName(sub)).includes(subject));
-                    const isLast = sIdx === activeSubjects.length - 1;
+              <table className="data-table" style={{ marginTop: '20px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
+                    <th style={{ width: '80px' }}>CODE</th>
+                    <th style={{ textAlign: 'left' }}>CENTER NAME & PLACE</th>
+                    <th style={{ textAlign: 'left' }}>SUPERVISOR 1</th>
+                    <th style={{ textAlign: 'left' }}>SUPERVISOR 2 (OPTIONAL)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {examCenters.map((center, idx) => (
+                    <tr key={center.code}>
+                      <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                      <td style={{ fontWeight: '600' }}><code>{center.code}</code></td>
+                      <td style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '700' }}>{center.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{center.place} | {center.district}</div>
+                      </td>
+                      <td style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '600' }}>{center.supervisor_name || '-'}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {center.supervisor_place ? `${center.supervisor_place} | ` : ''} {center.supervisor_phone || ''}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'left' }}>
+                        {center.supervisor2_name ? (
+                          <>
+                            <div style={{ fontWeight: '600' }}>{center.supervisor2_name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {center.supervisor2_place ? `${center.supervisor2_place} | ` : ''} {center.supervisor2_phone || ''}
+                            </div>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {examCenters.length === 0 && (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '24px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                        No exam centers designated yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
 
+              <div className="print-signatures" style={{ marginTop: '50px' }}>
+                <div className="sig-block">Prepared By</div>
+                <div className="sig-block">Checked By</div>
+                <div className="sig-block">Controller of Examinations</div>
+              </div>
+            </div>
+          )}
+
+          {/* 9. DESK SLIPS & SEATING CHART */}
+          {reportType === 'desk_slips' && (
+            <div>
+              {groupedSeatingData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+                  <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>No candidates found for the selected Exam Center and Slot.</h4>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Verify that the slot contains scheduled subjects and the center has assigned schools with registrations.</p>
+                </div>
+              ) : (
+                groupedSeatingData.map((group, gIdx) => {
+                  const totalCand = group.candidates.length;
+                  const isLastGroup = gIdx === groupedSeatingData.length - 1;
+
+                  if (deskSlipsViewMode === 'chart') {
+                    // RENDER SEATING CHART LIST
                     return (
-                      <div key={subject} className={isLast ? '' : 'page-break-after'} style={{ marginBottom: '40px' }}>
+                      <div key={`${group.centerCode}_${group.slotId}`} className={isLastGroup ? '' : 'page-break-after'} style={{ marginBottom: '40px' }}>
                         <div className="print-report-header">
                           <h2>Council of Samastha Womens Colleges (CSWC)</h2>
                           <h3>SAY & Improvement Examinations</h3>
-                          <p>Exam Attendance Register (Subject-wise)</p>
+                          <p>Exam Seating Arrangement Chart</p>
                         </div>
 
                         <div className="print-meta-grid">
-                          <div className="meta-item">Exam Center: <strong>{centerObj?.name} ({selectedCenter})</strong></div>
-                          <div className="meta-item">Place: <strong>{centerObj?.place}</strong></div>
-                          <div className="meta-item">Class: <strong>{selectedClass}</strong></div>
-                          <div className="meta-item">Subject: <strong>{subject}</strong></div>
-                          
-                          {slot ? (
-                            <>
-                              <div className="meta-item">Exam Date: <strong>{new Date(slot.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></div>
-                              <div className="meta-item">Session: <strong>{slot.session} ({slot.session.includes('FN') ? fnTime : anTime})</strong></div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="meta-item">Exam Date: <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>Not Scheduled yet</span></div>
-                              <div className="meta-item">Session: <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>Not Scheduled yet</span></div>
-                            </>
-                          )}
-                          <div className="meta-item">Total Candidates: <strong>{subjectAttendance.length}</strong></div>
+                          <div className="meta-item">Exam Center: <strong>[{group.centerCode}] {group.centerName}</strong></div>
+                          <div className="meta-item">Place: <strong>{group.centerPlace}</strong></div>
+                          <div className="meta-item">Exam Date: <strong>{new Date(group.slotDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></div>
+                          <div className="meta-item">Session: <strong>{group.slotSession} ({group.slotTime})</strong></div>
+                          <div className="meta-item">Total Candidates: <strong>{totalCand}</strong></div>
+                          <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
                         </div>
 
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th style={{ width: '50px', textAlign: 'center' }}>SL</th>
-                              <th style={{ width: '100px' }}>Student UID</th>
-                              <th style={{ textAlign: 'left' }}>Student Name</th>
-                              <th style={{ width: '80px', textAlign: 'center' }}>Class</th>
-                              <th style={{ textAlign: 'left' }}>College Name</th>
-                              <th style={{ width: '150px' }}>Candidate Signature</th>
+                              <th style={{ width: '80px', textAlign: 'center' }}>SEAT NO</th>
+                              <th style={{ width: '120px', textAlign: 'center' }}>STUDENT UID</th>
+                              <th style={{ textAlign: 'left' }}>STUDENT NAME</th>
+                              <th style={{ width: '80px', textAlign: 'center' }}>CLASS</th>
+                              <th style={{ textAlign: 'left' }}>SUBJECT</th>
+                              <th style={{ textAlign: 'left' }}>COLLEGE NAME</th>
+                              <th style={{ width: '140px', textAlign: 'center' }}>SIGNATURE</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {subjectAttendance.map((reg, idx) => (
-                              <tr key={idx}>
-                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                                <td><code>{reg.uid}</code></td>
-                                <td style={{ fontWeight: '700', textAlign: 'left' }}>{reg.name}</td>
-                                <td style={{ textAlign: 'center' }}><span className="badge badge-neutral" style={{ fontSize: '10px' }}>{reg.class}</span></td>
-                                <td style={{ textAlign: 'left' }}>{reg.school_name}</td>
+                            {group.candidates.map((cand) => (
+                              <tr key={cand.id}>
+                                <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '15px' }}>
+                                  {String(cand.seatNo).padStart(2, '0')}
+                                </td>
+                                <td style={{ textAlign: 'center' }}><code>{cand.uid}</code></td>
+                                <td style={{ fontWeight: '700', textAlign: 'left' }}>{cand.name}</td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <span className="badge badge-neutral" style={{ fontSize: '10px' }}>
+                                    {cand.class}
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: 'left', fontWeight: '600' }}>{cand.subject}</td>
+                                <td style={{ textAlign: 'left', fontSize: '12px' }}>{cand.school_name}</td>
                                 <td style={{ height: '35px' }}></td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
 
-                        <div className="print-signatures" style={{ marginTop: '80px' }}>
+                        <div className="print-signatures" style={{ marginTop: '60px' }}>
                           <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Invigilator Name & Sig.</div>
                           <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Chief Superintendent (Seal & Sig.)</div>
                         </div>
                       </div>
                     );
-                  })}
+                  } else {
+                    // RENDER PRINTABLE DESK SLIPS (8 PER PAGE)
+                    const chunks = [];
+                    for (let i = 0; i < group.candidates.length; i += 8) {
+                      chunks.push(group.candidates.slice(i, i + 8));
+                    }
 
-                  {activeSubjects.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-                      <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>No candidates found for Class {selectedClass} at this center.</h4>
-                      <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Try selecting a different exam center or class.</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        )}
+                    return (
+                      <div key={`${group.centerCode}_${group.slotId}`}>
+                        {chunks.map((chunk, cIdx) => {
+                          const isLastChunk = cIdx === chunks.length - 1;
+                          const pageIsLast = isLastGroup && isLastChunk;
+                          return (
+                            <div 
+                              key={cIdx} 
+                              className={`desk-slips-page ${pageIsLast ? '' : 'page-break-after'}`}
+                              style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: '1fr 1fr', 
+                                gridTemplateRows: 'repeat(4, 1fr)', 
+                                gap: '12px',
+                                boxSizing: 'border-box',
+                                marginBottom: '20px'
+                              }}
+                            >
+                              {chunk.map((cand) => (
+                                <div key={cand.id} className="desk-slip-card">
+                                  <div className="desk-slip-header">
+                                    <div className="desk-slip-logo">CSWC</div>
+                                    <div className="desk-slip-title">SAY/IMP EXAM 2026</div>
+                                  </div>
+                                  <div className="desk-slip-body">
+                                    <div className="desk-slip-row">
+                                      <span className="desk-slip-label">Center:</span>
+                                      <span className="desk-slip-value" style={{ fontWeight: '800', textTransform: 'uppercase' }}>
+                                        [{group.centerCode}] {group.centerName.substring(0, 30)}{group.centerName.length > 30 ? '...' : ''}
+                                      </span>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0' }}>
+                                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                        <span className="desk-slip-label">Seat No:</span>
+                                        <span className="desk-slip-seat-no">
+                                          {String(cand.seatNo).padStart(2, '0')}
+                                        </span>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                        <span className="desk-slip-label">Class:</span>
+                                        <span className="desk-slip-class" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>
+                                          {cand.class.startsWith('PREVIOUS EXAM') ? cand.class.replace('PREVIOUS EXAM / SAY ', '') : cand.class}
+                                        </span>
+                                      </div>
+                                    </div>
 
-        {/* CENTER ALLOCATION LIST */}
-        {reportType === 'center_list' && (
-          <div className="theme-allocation">
-            <div className="print-report-header">
-              <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-              <h3>SAY & Improvement Examinations</h3>
-              <p>Exam Center Allocation List (For Publication to Principals)</p>
-            </div>
+                                    <div className="desk-slip-row">
+                                      <span className="desk-slip-label">Candidate Name:</span>
+                                      <span className="desk-slip-name">{cand.name}</span>
+                                    </div>
+                                    
+                                    <div className="desk-slip-row">
+                                      <span className="desk-slip-label">UID:</span>
+                                      <span className="desk-slip-uid">{cand.uid}</span>
+                                    </div>
 
-            <div className="print-meta-grid">
-              <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-              <div className="meta-item">Total Institutions: <strong>{institutions.length}</strong></div>
-              <div className="meta-item">Designated Centers: <strong>{examCenters.length}</strong></div>
-              <div className="meta-item">Unassigned Colleges: <strong style={{ color: institutions.filter(i => !i.isExamCenter && !i.assignedToCenter).length > 0 ? 'var(--danger)' : 'var(--success)' }}>{institutions.filter(i => !i.isExamCenter && !i.assignedToCenter).length}</strong></div>
-            </div>
+                                    <div className="desk-slip-row">
+                                      <span className="desk-slip-label">Subject:</span>
+                                      <span className="desk-slip-subject">{cand.subject}</span>
+                                    </div>
 
-            {institutionsByZone.map(({ zone, institutions: zoneInsts }) => (
-              <div key={zone} style={{ breakInside: 'avoid', pageBreakInside: 'avoid', marginBottom: '32px' }}>
-                <h4 style={{ 
-                  backgroundColor: 'var(--primary-light)', 
-                  color: 'var(--primary)', 
-                  padding: '10px 16px', 
-                  borderRadius: 'var(--radius-sm)', 
-                  marginBottom: '12px',
-                  borderLeft: '4px solid var(--primary)',
-                  fontSize: '16px',
-                  fontWeight: '800'
-                }}>
-                  ZONE: {zone} ({zoneInsts.length} Colleges)
-                </h4>
-
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
-                      <th style={{ width: '80px' }}>CODE</th>
-                      <th style={{ textAlign: 'left' }}>COLLEGE NAME & PLACE</th>
-                      <th style={{ width: '120px', textAlign: 'center' }}>CANDIDATES</th>
-                      <th style={{ textAlign: 'left' }}>ASSIGNED EXAM CENTER</th>
-                      <th style={{ width: '150px', textAlign: 'center' }}>CENTER STATUS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {zoneInsts.map((inst, idx) => {
-                      const studentCount = new Set(registrations.filter(r => r.school_code === inst.code).map(r => r.uid)).size;
-                      const paperCount = registrations.filter(r => r.school_code === inst.code).length;
-                      
-                      // Center details
-                      let centerDisplay = '';
-                      let statusBadge = null;
-
-                      if (inst.isExamCenter) {
-                        centerDisplay = 'SELF CENTER';
-                        statusBadge = <span className="badge badge-success">SELF CENTER</span>;
-                      } else if (inst.assignedToCenter) {
-                        const center = institutions.find(i => i.code === inst.assignedToCenter);
-                        if (center) {
-                          centerDisplay = `[${center.code}] ${center.name}, ${center.place}`;
-                          statusBadge = <span className="badge badge-neutral">MAPPED</span>;
-                        } else {
-                          centerDisplay = `[${inst.assignedToCenter}] (Center Details Missing)`;
-                          statusBadge = <span className="badge badge-warning">MAPPED (MISSING)</span>;
-                        }
-                      } else {
-                        centerDisplay = 'NOT ASSIGNED';
-                        statusBadge = <span className="badge badge-danger">UNASSIGNED</span>;
-                      }
-
-                      return (
-                        <tr key={inst.code}>
-                          <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                          <td style={{ fontWeight: '600' }}><code>{inst.code}</code></td>
-                          <td style={{ textAlign: 'left' }}>
-                            <div style={{ fontWeight: '700' }}>{inst.name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{inst.place} | {inst.district}</div>
-                          </td>
-                          <td style={{ textAlign: 'center', fontSize: '13px' }}>
-                            {studentCount > 0 ? (
-                              <span><strong>{studentCount}</strong> std <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>({paperCount} papers)</span></span>
-                            ) : (
-                              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>0 std</span>
-                            )}
-                          </td>
-                          <td style={{ textAlign: 'left', fontWeight: inst.isExamCenter ? '600' : '400' }}>
-                            {inst.isExamCenter ? (
-                              <span style={{ color: 'var(--success)', fontWeight: '700' }}>{centerDisplay}</span>
-                            ) : inst.assignedToCenter ? (
-                              <span>{centerDisplay}</span>
-                            ) : (
-                              <span style={{ color: 'var(--danger)', fontWeight: '700' }}>{centerDisplay}</span>
-                            )}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            {statusBadge}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-
-            <div className="print-signatures" style={{ marginTop: '50px' }}>
-              <div className="sig-block">Prepared By</div>
-              <div className="sig-block">Checked By</div>
-              <div className="sig-block">Controller of Examinations</div>
-            </div>
-          </div>
-        )}
-
-        {/* INSTITUTION ENROLLMENT SUMMARY */}
-        {reportType === 'institution_enrollment' && (
-          <div className="theme-enrollment">
-            <div className="print-report-header">
-              <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-              <h3>SAY & Improvement Examinations</h3>
-              <p>Institution Enrollment Summary - For Center Planning & Allocation</p>
-            </div>
-
-            <div className="print-meta-grid">
-              <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-              <div className="meta-item">Total Institutions: <strong>{institutions.length}</strong></div>
-              <div className="meta-item">Total Candidates: <strong>{new Set(registrations.map(r=>r.uid)).size}</strong></div>
-              <div className="meta-item">Total Paper Registrations: <strong>{registrations.length}</strong></div>
-            </div>
-
-            {institutionsByZone.map(({ zone, institutions: zoneInsts }) => {
-              // Calculate unique student count and paper registrations for this zone
-              const zoneSchoolCodes = new Set(zoneInsts.map(i => i.code));
-              const zoneUniqueCandidates = new Set(
-                registrations
-                  .filter(r => zoneSchoolCodes.has(r.school_code))
-                  .map(r => r.uid)
-              ).size;
-              const zoneTotalPapers = registrations
-                .filter(r => zoneSchoolCodes.has(r.school_code))
-                .length;
-
-              return (
-                <div key={zone} style={{ breakInside: 'avoid', pageBreakInside: 'avoid', marginBottom: '32px' }}>
-                  <h4 style={{ 
-                    backgroundColor: 'var(--primary-light)', 
-                    color: 'var(--primary)', 
-                    padding: '10px 16px', 
-                    borderRadius: 'var(--radius-sm)', 
-                    marginBottom: '12px',
-                    borderLeft: '4px solid var(--primary)',
-                    fontSize: '16px',
-                    fontWeight: '800',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span>ZONE: {zone} ({zoneInsts.length} Colleges)</span>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                      Zone Candidates: {zoneUniqueCandidates} std ({zoneTotalPapers} papers)
-                    </span>
-                  </h4>
-
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
-                        <th style={{ width: '80px' }}>CODE</th>
-                        <th style={{ textAlign: 'left' }}>COLLEGE NAME & PLACE</th>
-                        <th style={{ width: '120px', textAlign: 'center' }}>DISTRICT</th>
-                        <th style={{ width: '150px', textAlign: 'center' }}>UNIQUE CANDIDATES</th>
-                        <th style={{ width: '150px', textAlign: 'center' }}>PAPER REGISTRATIONS</th>
-                        <th style={{ textAlign: 'left' }}>CENTER STATUS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {zoneInsts.map((inst, idx) => {
-                        const studentCount = new Set(registrations.filter(r => r.school_code === inst.code).map(r => r.uid)).size;
-                        const paperCount = registrations.filter(r => r.school_code === inst.code).length;
-                        
-                        let centerDisplay = '';
-                        if (inst.isExamCenter) {
-                          centerDisplay = 'SELF CENTER';
-                        } else if (inst.assignedToCenter) {
-                          const center = institutions.find(i => i.code === inst.assignedToCenter);
-                          centerDisplay = center ? `MAPPED TO: [${center.code}] ${center.name}` : `MAPPED TO: ${inst.assignedToCenter}`;
-                        } else {
-                          centerDisplay = 'UNASSIGNED';
-                        }
-
-                        return (
-                          <tr key={inst.code}>
-                            <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                            <td style={{ fontWeight: '600' }}><code>{inst.code}</code></td>
-                            <td style={{ textAlign: 'left' }}>
-                              <div style={{ fontWeight: '700' }}>{inst.name}</div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{inst.place}</div>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>{inst.district}</td>
-                            <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '14px', color: studentCount > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
-                              {studentCount}
-                            </td>
-                            <td style={{ textAlign: 'center', fontWeight: '600', color: paperCount > 0 ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                              {paperCount}
-                            </td>
-                            <td style={{ textAlign: 'left' }}>
-                              {inst.isExamCenter ? (
-                                <span className="badge badge-success" style={{ fontWeight: 'bold' }}>{centerDisplay}</span>
-                              ) : inst.assignedToCenter ? (
-                                <span className="badge badge-neutral">{centerDisplay}</span>
-                              ) : (
-                                <span className="badge badge-danger" style={{ fontWeight: 'bold' }}>{centerDisplay}</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-
-            <div className="print-signatures" style={{ marginTop: '50px' }}>
-              <div className="sig-block">Prepared By</div>
-              <div className="sig-block">Checked By</div>
-              <div className="sig-block">Controller of Examinations</div>
-            </div>
-          </div>
-        )}
-
-        {/* SUPERVISOR LIST */}
-        {reportType === 'supervisor_list' && (
-          <div className="theme-supervisor">
-            <div className="print-report-header">
-              <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-              <h3>SAY & Improvement Examinations</h3>
-              <p>Supervisor by Center List (For Exam Control)</p>
-            </div>
-
-            <div className="print-meta-grid">
-              <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-              <div className="meta-item">Total Exam Centers: <strong>{examCenters.length}</strong></div>
-            </div>
-
-            <table className="data-table" style={{ marginTop: '20px' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '60px', textAlign: 'center' }}>SL NO</th>
-                  <th style={{ width: '80px' }}>CODE</th>
-                  <th style={{ textAlign: 'left' }}>CENTER NAME & PLACE</th>
-                  <th style={{ textAlign: 'left' }}>SUPERVISOR 1</th>
-                  <th style={{ textAlign: 'left' }}>SUPERVISOR 2 (OPTIONAL)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {examCenters.map((center, idx) => (
-                  <tr key={center.code}>
-                    <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                    <td style={{ fontWeight: '600' }}><code>{center.code}</code></td>
-                    <td style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: '700' }}>{center.name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{center.place} | {center.district}</div>
-                    </td>
-                    <td style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: '600' }}>{center.supervisor_name || '-'}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {center.supervisor_place ? `${center.supervisor_place} | ` : ''} {center.supervisor_phone || ''}
+                                    <div className="desk-slip-row-split">
+                                      <div>
+                                        <span className="desk-slip-label">Date:</span>
+                                        <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                          {new Date(group.slotDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="desk-slip-label">Session:</span>
+                                        <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                          {group.slotSession.includes('FN') ? 'FN' : 'AN'} ({group.slotTime})
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
                       </div>
-                    </td>
-                    <td style={{ textAlign: 'left' }}>
-                      {center.supervisor2_name ? (
-                        <>
-                          <div style={{ fontWeight: '600' }}>{center.supervisor2_name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            {center.supervisor2_place ? `${center.supervisor2_place} | ` : ''} {center.supervisor2_phone || ''}
-                          </div>
-                        </>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {examCenters.length === 0 && (
-                  <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '24px', fontStyle: 'italic', color: 'var(--text-muted)' }}>
-                      No exam centers designated yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            <div className="print-signatures" style={{ marginTop: '50px' }}>
-              <div className="sig-block">Prepared By</div>
-              <div className="sig-block">Checked By</div>
-              <div className="sig-block">Controller of Examinations</div>
-            </div>
-          </div>
-        )}
-
-        {/* DESK SLIPS & SEATING CHART */}
-        {reportType === 'desk_slips' && (
-          <div>
-            {groupedSeatingData.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-                <h4 style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>No candidates found for the selected Exam Center and Slot.</h4>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Verify that the slot contains scheduled subjects and the center has assigned schools with registrations.</p>
-              </div>
-            ) : (
-              groupedSeatingData.map((group, gIdx) => {
-                const totalCand = group.candidates.length;
-                const isLast = gIdx === groupedSeatingData.length - 1;
-
-                if (deskSlipsViewMode === 'chart') {
-                  // RENDER SEATING CHART LIST
-                  return (
-                    <div key={`${group.centerCode}_${group.slotId}`} className={isLast ? '' : 'page-break-after'} style={{ marginBottom: '40px' }}>
-                      <div className="print-report-header">
-                        <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-                        <h3>SAY & Improvement Examinations</h3>
-                        <p>Exam Seating Arrangement Chart</p>
-                      </div>
-
-                      <div className="print-meta-grid">
-                        <div className="meta-item">Exam Center: <strong>[{group.centerCode}] {group.centerName}</strong></div>
-                        <div className="meta-item">Place: <strong>{group.centerPlace}</strong></div>
-                        <div className="meta-item">Exam Date: <strong>{new Date(group.slotDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></div>
-                        <div className="meta-item">Session: <strong>{group.slotSession} ({group.slotTime})</strong></div>
-                        <div className="meta-item">Total Candidates: <strong>{totalCand}</strong></div>
-                        <div className="meta-item">Report Date: <strong>{new Date().toLocaleDateString()}</strong></div>
-                      </div>
-
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th style={{ width: '80px', textAlign: 'center' }}>SEAT NO</th>
-                            <th style={{ width: '120px', textAlign: 'center' }}>STUDENT UID</th>
-                            <th style={{ textAlign: 'left' }}>STUDENT NAME</th>
-                            <th style={{ width: '80px', textAlign: 'center' }}>CLASS</th>
-                            <th style={{ textAlign: 'left' }}>SUBJECT</th>
-                            <th style={{ textAlign: 'left' }}>COLLEGE NAME</th>
-                            <th style={{ width: '140px', textAlign: 'center' }}>SIGNATURE</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.candidates.map((cand) => (
-                            <tr key={cand.id}>
-                              <td style={{ textAlign: 'center', fontWeight: '800', fontSize: '15px' }}>
-                                {String(cand.seatNo).padStart(2, '0')}
-                              </td>
-                              <td style={{ textAlign: 'center' }}><code>{cand.uid}</code></td>
-                              <td style={{ fontWeight: '700', textAlign: 'left' }}>{cand.name}</td>
-                              <td style={{ textAlign: 'center' }}>
-                                <span className="badge badge-neutral" style={{ fontSize: '10px' }}>
-                                  {cand.class}
-                                </span>
-                              </td>
-                              <td style={{ textAlign: 'left', fontWeight: '600' }}>{cand.subject}</td>
-                              <td style={{ textAlign: 'left', fontSize: '12px' }}>{cand.school_name}</td>
-                              <td style={{ height: '35px' }}></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-
-                      <div className="print-signatures" style={{ marginTop: '60px' }}>
-                        <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Invigilator Name & Sig.</div>
-                        <div className="sig-block" style={{ borderTop: '1px solid #000' }}>Chief Superintendent (Seal & Sig.)</div>
-                      </div>
-                    </div>
-                  );
-                } else {
-                  // RENDER PRINTABLE DESK SLIPS (8 PER PAGE)
-                  const chunks = [];
-                  for (let i = 0; i < group.candidates.length; i += 8) {
-                    chunks.push(group.candidates.slice(i, i + 8));
+                    );
                   }
+                })
+              )}
+            </div>
+          )}
 
-                  return (
-                    <div key={`${group.centerCode}_${group.slotId}`}>
-                      {chunks.map((chunk, cIdx) => {
-                        const isLastChunk = cIdx === chunks.length - 1;
-                        const pageIsLast = isLast && isLastChunk;
-                        return (
-                          <div 
-                            key={cIdx} 
-                            className={`desk-slips-page ${pageIsLast ? '' : 'page-break-after'}`}
-                            style={{ 
-                              display: 'grid', 
-                              gridTemplateColumns: '1fr 1fr', 
-                              gridTemplateRows: 'repeat(4, 1fr)', 
-                              gap: '12px',
-                              boxSizing: 'border-box',
-                              marginBottom: '20px'
-                            }}
-                          >
-                            {chunk.map((cand) => (
-                              <div key={cand.id} className="desk-slip-card">
-                                <div className="desk-slip-header">
-                                  <div className="desk-slip-logo">CSWC</div>
-                                  <div className="desk-slip-title">SAY/IMP EXAM 2026</div>
-                                </div>
-                                <div className="desk-slip-body">
-                                  <div className="desk-slip-row">
-                                    <span className="desk-slip-label">Center:</span>
-                                    <span className="desk-slip-value" style={{ fontWeight: '800', textTransform: 'uppercase' }}>
-                                      [{group.centerCode}] {group.centerName.substring(0, 30)}{group.centerName.length > 30 ? '...' : ''}
-                                    </span>
-                                  </div>
-                                  
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0' }}>
-                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                      <span className="desk-slip-label">Seat No:</span>
-                                      <span className="desk-slip-seat-no">
-                                        {String(cand.seatNo).padStart(2, '0')}
-                                      </span>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                      <span className="desk-slip-label">Class:</span>
-                                      <span className="desk-slip-class">{cand.class}</span>
-                                    </div>
-                                  </div>
-
-                                  <div className="desk-slip-row">
-                                    <span className="desk-slip-label">Candidate Name:</span>
-                                    <span className="desk-slip-name">{cand.name}</span>
-                                  </div>
-                                  
-                                  <div className="desk-slip-row">
-                                    <span className="desk-slip-label">UID:</span>
-                                    <span className="desk-slip-uid">{cand.uid}</span>
-                                  </div>
-
-                                  <div className="desk-slip-row">
-                                    <span className="desk-slip-label">Subject:</span>
-                                    <span className="desk-slip-subject">{cand.subject}</span>
-                                  </div>
-
-                                  <div className="desk-slip-row-split">
-                                    <div>
-                                      <span className="desk-slip-label">Date:</span>
-                                      <span className="desk-slip-value" style={{ fontSize: '10px' }}>
-                                        {new Date(group.slotDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="desk-slip-label">Session:</span>
-                                      <span className="desk-slip-value" style={{ fontSize: '10px' }}>
-                                        {group.slotSession.includes('FN') ? 'FN' : 'AN'} ({group.slotTime})
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                }
-              })
-            )}
-          </div>
-        )}
+        </div>
 
       </div>
 

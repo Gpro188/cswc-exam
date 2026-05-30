@@ -355,6 +355,17 @@ function App() {
       case 'timetable':
         return (
           <TimeTable 
+            mode="regular"
+            registrations={registrations}
+            previousStudents={previousStudents}
+            timeTable={timeTable}
+            onUpdateTimeTable={updateTimeTable}
+          />
+        );
+      case 'prev_timetable':
+        return (
+          <TimeTable 
+            mode="previous"
             registrations={registrations}
             previousStudents={previousStudents}
             timeTable={timeTable}
@@ -409,6 +420,7 @@ function App() {
       case 'allocation': return 'Exam Center Designation & Mapping';
       case 'registrations': return 'Student Registrations';
       case 'timetable': return 'Exam Schedule & Time Table';
+      case 'prev_timetable': return 'Previous Exam Schedule & Time Table';
       case 'previous': return 'Previous SAY Candidates Uploader';
       case 'reports': return 'Print Office Reports & Center Lists';
       case 'import': return 'Database Import & Settings';
@@ -422,6 +434,7 @@ function App() {
       case 'allocation': return 'Designate exam centers and map schools to centers zone-wise';
       case 'registrations': return 'Search, filter, and view registered candidates';
       case 'timetable': return 'Assign exam dates and sessions to subjects';
+      case 'prev_timetable': return 'Assign exam dates and sessions to previous exam subjects';
       case 'previous': return 'Upload external previous exam SAY student spreadsheets';
       case 'reports': return 'Export summaries, packing counts, and print attendance registers';
       case 'import': return 'Upload new schools, append student registries, and database backups';
@@ -468,6 +481,11 @@ function App() {
           <li className={`menu-item ${activeTab === 'timetable' ? 'active' : ''}`}>
             <button onClick={() => handleTabChange('timetable')}>
               <Calendar size={18} /> Time Table
+            </button>
+          </li>
+          <li className={`menu-item ${activeTab === 'prev_timetable' ? 'active' : ''}`}>
+            <button onClick={() => handleTabChange('prev_timetable')}>
+              <Calendar size={18} /> Previous Time Table
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'previous' ? 'active' : ''}`}>
