@@ -33,6 +33,7 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
   const [selectedSlotId, setSelectedSlotId] = useState('');
   const [selectedClass, setSelectedClass] = useState('');
   const [deskSlipsViewMode, setDeskSlipsViewMode] = useState('chart');
+  const [deskSlipsPrintSides, setDeskSlipsPrintSides] = useState('single');
 
   const fnTime = localStorage.getItem('cswc_fn_time') || '09:30 AM - 12:30 PM';
   const anTime = localStorage.getItem('cswc_an_time') || '01:30 PM - 04:30 PM';
@@ -489,7 +490,7 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
       category: 'Conduct & Attendance',
       title: 'Desk Slips & Seating Arrangement',
       shortTitle: 'Desk Slips / Chart',
-      description: 'Printable desk slips (8/page) and flat room seating lists.',
+      description: 'Printable desk slips (10/page) and flat room seating lists.',
       icon: <ClipboardList size={18} />
     }
   ];
@@ -642,9 +643,25 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
                     onClick={() => setDeskSlipsViewMode('slips')}
                     style={{ padding: '8px 12px', fontSize: '13px', whiteSpace: 'nowrap', height: '42px', flexGrow: 1 }}
                   >
-                    Desk Slips (8/Page)
+                    Desk Slips (10/Page)
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Desk Slips Print Sides */}
+            {reportType === 'desk_slips' && deskSlipsViewMode === 'slips' && (
+              <div className="form-group" style={{ minWidth: '180px' }}>
+                <label>Print Sides</label>
+                <select
+                  className="form-select"
+                  value={deskSlipsPrintSides}
+                  onChange={(e) => setDeskSlipsPrintSides(e.target.value)}
+                  style={{ height: '42px' }}
+                >
+                  <option value="single">Single Sided (Front Only)</option>
+                  <option value="double">Double Sided (Front & Back)</option>
+                </select>
               </div>
             )}
 
@@ -1633,83 +1650,129 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
                           const isLastChunk = cIdx === chunks.length - 1;
                           const pageIsLast = isLastGroup && isLastChunk;
                           return (
-                            <div 
-                              key={cIdx} 
-                              className={`desk-slips-page ${pageIsLast ? '' : 'page-break-after'}`}
-                              style={{ 
-                                display: 'grid', 
-                                gridTemplateColumns: '1fr 1fr', 
-                                gridTemplateRows: 'repeat(5, 1fr)', 
-                                gap: '6px',
-                                boxSizing: 'border-box',
-                                marginBottom: '20px'
-                              }}
-                            >
-                              {chunk.map((cand) => {
-                                const candClass = cand.class || 'UNKNOWN CLASS';
-                                return (
-                                  <div key={cand.id} className="desk-slip-card">
-                                    <div className="desk-slip-header">
-                                      <div className="desk-slip-logo">CSWC</div>
-                                      <div className="desk-slip-title">SAY/IMP EXAM 2026</div>
+                            <React.Fragment key={cIdx}>
+                              {/* FRONT SIDE PAGE OF SLIPS */}
+                              <div 
+                                className={`desk-slips-page ${deskSlipsPrintSides === 'double' ? 'page-break-after' : (pageIsLast ? '' : 'page-break-after')}`}
+                                style={{ 
+                                  display: 'grid', 
+                                  gridTemplateColumns: '1fr 1fr', 
+                                  gridTemplateRows: 'repeat(5, 1fr)', 
+                                  gap: '6px',
+                                  boxSizing: 'border-box',
+                                  marginBottom: '20px'
+                                }}
+                              >
+                                {chunk.map((cand) => {
+                                  const candClass = cand.class || 'UNKNOWN CLASS';
+                                  return (
+                                    <div key={cand.id} className="desk-slip-card">
+                                      <div className="desk-slip-header">
+                                        <div className="desk-slip-logo">CSWC</div>
+                                        <div className="desk-slip-title">SAY/IMP EXAM 2026</div>
+                                      </div>
+                                      <div className="desk-slip-body">
+                                        <div className="desk-slip-row">
+                                          <span className="desk-slip-label">Center:</span>
+                                          <span className="desk-slip-value" style={{ fontWeight: '800', textTransform: 'uppercase' }}>
+                                            [{group.centerCode}] {group.centerName.substring(0, 30)}{group.centerName.length > 30 ? '...' : ''}
+                                          </span>
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0' }}>
+                                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                            <span className="desk-slip-label">Seat No:</span>
+                                            <span className="desk-slip-seat-no">
+                                              {String(cand.seatNo).padStart(2, '0')}
+                                            </span>
+                                          </div>
+                                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                            <span className="desk-slip-label">Class:</span>
+                                            <span className="desk-slip-class" style={{ whiteSpace: 'nowrap' }}>
+                                              {candClass.startsWith('PREVIOUS EXAM') ? candClass.replace('PREVIOUS EXAM / SAY ', '') : candClass}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className="desk-slip-row">
+                                          <span className="desk-slip-label">Candidate Name:</span>
+                                          <span className="desk-slip-name">{cand.name}</span>
+                                        </div>
+                                        
+                                        <div className="desk-slip-row">
+                                          <span className="desk-slip-label">UID:</span>
+                                          <span className="desk-slip-uid">{cand.uid}</span>
+                                        </div>
+
+                                        <div className="desk-slip-row">
+                                          <span className="desk-slip-label">Subject:</span>
+                                          <span className="desk-slip-subject">{cand.subject}</span>
+                                        </div>
+
+                                        <div className="desk-slip-row-split">
+                                          <div>
+                                            <span className="desk-slip-label">Date:</span>
+                                            <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                              {new Date(group.slotDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="desk-slip-label">Session:</span>
+                                            <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                              {group.slotSession.includes('FN') ? 'FN' : 'AN'} ({group.slotTime})
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="desk-slip-body">
-                                      <div className="desk-slip-row">
-                                        <span className="desk-slip-label">Center:</span>
-                                        <span className="desk-slip-value" style={{ fontWeight: '800', textTransform: 'uppercase' }}>
-                                          [{group.centerCode}] {group.centerName.substring(0, 30)}{group.centerName.length > 30 ? '...' : ''}
-                                        </span>
-                                      </div>
-                                      
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0' }}>
-                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                          <span className="desk-slip-label">Seat No:</span>
-                                          <span className="desk-slip-seat-no">
-                                            {String(cand.seatNo).padStart(2, '0')}
-                                          </span>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                          <span className="desk-slip-label">Class:</span>
-                                          <span className="desk-slip-class" style={{ whiteSpace: 'nowrap' }}>
-                                            {candClass.startsWith('PREVIOUS EXAM') ? candClass.replace('PREVIOUS EXAM / SAY ', '') : candClass}
-                                          </span>
-                                        </div>
-                                      </div>
+                                  );
+                                })}
+                              </div>
 
-                                      <div className="desk-slip-row">
-                                        <span className="desk-slip-label">Candidate Name:</span>
-                                        <span className="desk-slip-name">{cand.name}</span>
-                                      </div>
-                                      
-                                      <div className="desk-slip-row">
-                                        <span className="desk-slip-label">UID:</span>
-                                        <span className="desk-slip-uid">{cand.uid}</span>
-                                      </div>
-
-                                      <div className="desk-slip-row">
-                                        <span className="desk-slip-label">Subject:</span>
-                                        <span className="desk-slip-subject">{cand.subject}</span>
-                                      </div>
-
-                                      <div className="desk-slip-row-split">
-                                        <div>
-                                          <span className="desk-slip-label">Date:</span>
-                                          <span className="desk-slip-value" style={{ fontSize: '10px' }}>
-                                            {new Date(group.slotDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                          </span>
+                              {/* BACK SIDE PAGE OF SLIPS (RULES & REGULATIONS) */}
+                              {deskSlipsPrintSides === 'double' && (
+                                <div 
+                                  className={`desk-slips-page ${pageIsLast ? '' : 'page-break-after'}`}
+                                  style={{ 
+                                    display: 'grid', 
+                                    gridTemplateColumns: '1fr 1fr', 
+                                    gridTemplateRows: 'repeat(5, 1fr)', 
+                                    gap: '6px',
+                                    boxSizing: 'border-box',
+                                    marginBottom: '20px',
+                                    backgroundColor: '#fff'
+                                  }}
+                                >
+                                  {chunk.map((cand) => (
+                                    <div key={`back_${cand.id}`} className="desk-slip-card">
+                                      <div className="desk-slip-back-content">
+                                        <div className="desk-slip-back-header">
+                                          <span className="desk-slip-logo">CSWC</span>
+                                          <span className="desk-slip-back-title">Candidate Rules</span>
                                         </div>
-                                        <div>
-                                          <span className="desk-slip-label">Session:</span>
-                                          <span className="desk-slip-value" style={{ fontSize: '10px' }}>
-                                            {group.slotSession.includes('FN') ? 'FN' : 'AN'} ({group.slotTime})
-                                          </span>
-                                        </div>
+                                        <ol className="desk-slip-instructions">
+                                          <li className="desk-slip-instruction-item">
+                                            <strong>Reporting:</strong> Occupy seats 15 min before commencement.
+                                          </li>
+                                          <li className="desk-slip-instruction-item">
+                                            <strong>ID Proof:</strong> Carry valid Institutional ID & Hall Ticket.
+                                          </li>
+                                          <li className="desk-slip-instruction-item">
+                                            <strong>Prohibited:</strong> Mobiles, smart watches & notes are forbidden.
+                                          </li>
+                                          <li className="desk-slip-instruction-item">
+                                            <strong>Conduct:</strong> Copying/malpractice leads to expulsion.
+                                          </li>
+                                          <li className="desk-slip-instruction-item">
+                                            <strong>Details:</strong> Verify Seat No, UID & Subject before writing.
+                                          </li>
+                                        </ol>
                                       </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                  ))}
+                                </div>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </div>
