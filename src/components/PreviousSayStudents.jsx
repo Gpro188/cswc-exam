@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Upload, Search, MapPin, Trash2, CheckCircle2, UserPlus, Plus, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Upload, Search, MapPin, Trash2, CheckCircle2, UserPlus, Plus, X, Edit2 } from 'lucide-react';
 import { parsePreviousSayExcelFile } from '../utils/excelParser';
 import { findMatchedInstitution, generateSchoolCode, cleanSubjectName } from '../utils/matching';
 
@@ -7,6 +7,45 @@ const PreviousSayStudents = ({ previousStudents, institutions, registrations, on
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedZone, setSelectedZone] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+
+  // Edit Candidate Modal states
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editSubs, setEditSubs] = useState([]);
+
+  // Sync edit state
+  useEffect(() => {
+    if (editingStudent) {
+      setEditSubs(editingStudent.subjects || []);
+    } else {
+      setEditSubs([]);
+    }
+  }, [editingStudent]);
+
+  const handleToggleEditSubject = (sub) => {
+    if (editSubs.includes(sub)) {
+      setEditSubs(editSubs.filter(s => s !== sub));
+    } else {
+      setEditSubs([...editSubs, sub]);
+    }
+  };
+
+  const handleSaveEdit = (e) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    if (editSubs.length === 0) {
+      alert("Please select at least one subject!");
+      return;
+    }
+    
+    const updated = {
+      ...editingStudent,
+      subjects: editSubs
+    };
+    
+    const updatedList = previousStudents.map(st => st.uid === editingStudent.uid ? updated : st);
+    onUpdatePreviousStudents(updatedList);
+    setEditingStudent(null);
+  };
 
   // Manual Add Form states
   const [showAddForm, setShowAddForm] = useState(false);
@@ -443,14 +482,24 @@ const PreviousSayStudents = ({ previousStudents, institutions, registrations, on
                           )}
                         </td>
                         <td>
-                          <button 
-                            className="btn btn-danger" 
-                            style={{ padding: '6px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            onClick={() => onDeletePreviousStudent(st.uid)}
-                            title="Delete Student"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button 
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              onClick={() => setEditingStudent(st)}
+                              title="Edit Candidate"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                            <button 
+                              className="btn btn-danger" 
+                              style={{ padding: '6px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              onClick={() => onDeletePreviousStudent(st.uid)}
+                              title="Delete Student"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -460,6 +509,94 @@ const PreviousSayStudents = ({ previousStudents, institutions, registrations, on
             </div>
           </div>
         </>
+      )}
+
+      {/* Edit Candidate Modal */}
+      {editingStudent && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 999,
+          padding: '20px'
+        }}>
+          <div className="card" style={{
+            width: '100%',
+            maxWidth: '550px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: '1px solid var(--border-color)',
+            animation: 'fadeIn 0.2s ease-out',
+            backgroundColor: '#ffffff'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-main)' }}>Edit Registered Subjects</h3>
+              <button 
+                type="button" 
+                onClick={() => setEditingStudent(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '16px', fontSize: '14px', lineHeight: '1.5' }}>
+              <div style={{ marginBottom: '4px' }}>Candidate: <strong>{editingStudent.name}</strong></div>
+              <div style={{ marginBottom: '4px' }}>UID: <code>{editingStudent.uid}</code></div>
+              <div>College: <span style={{ color: 'var(--text-muted)' }}>{editingStudent.college}</span></div>
+            </div>
+
+            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label style={{ marginBottom: '8px' }}>Select Active Subjects ({editSubs.length} selected)</label>
+                <div className="subject-checkbox-grid" style={{ maxHeight: '200px', padding: '10px' }}>
+                  {uniqueSubjects.map(sub => (
+                    <label key={sub} className="subject-checkbox-item" dir="rtl" style={{ justifyContent: 'flex-end', textAlign: 'right' }}>
+                      <span style={{ marginRight: '8px', fontSize: '13px' }}>{sub}</span>
+                      <input 
+                        type="checkbox"
+                        checked={editSubs.includes(sub)}
+                        onChange={() => handleToggleEditSubject(sub)}
+                      />
+                    </label>
+                  ))}
+                  {editSubs.filter(s => !uniqueSubjects.includes(s)).map(sub => (
+                    <label key={sub} className="subject-checkbox-item" dir="rtl" style={{ justifyContent: 'flex-end', textAlign: 'right', color: 'var(--primary)', fontWeight: '700' }}>
+                      <span style={{ marginRight: '8px', fontSize: '13px' }}>{sub} (Custom)</span>
+                      <input 
+                        type="checkbox"
+                        checked={editSubs.includes(sub)}
+                        onChange={() => handleToggleEditSubject(sub)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setEditingStudent(null)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>
