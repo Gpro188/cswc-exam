@@ -1621,10 +1621,10 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
                       </div>
                     );
                   } else {
-                    // RENDER PRINTABLE DESK SLIPS (8 PER PAGE)
+                    // RENDER PRINTABLE DESK SLIPS (10 PER PAGE)
                     const chunks = [];
-                    for (let i = 0; i < group.candidates.length; i += 8) {
-                      chunks.push(group.candidates.slice(i, i + 8));
+                    for (let i = 0; i < group.candidates.length; i += 10) {
+                      chunks.push(group.candidates.slice(i, i + 10));
                     }
 
                     return (
@@ -1639,73 +1639,76 @@ const Reports = ({ institutions, registrations, timeTable, previousStudents = []
                               style={{ 
                                 display: 'grid', 
                                 gridTemplateColumns: '1fr 1fr', 
-                                gridTemplateRows: 'repeat(4, 1fr)', 
-                                gap: '12px',
+                                gridTemplateRows: 'repeat(5, 1fr)', 
+                                gap: '6px',
                                 boxSizing: 'border-box',
                                 marginBottom: '20px'
                               }}
                             >
-                              {chunk.map((cand) => (
-                                <div key={cand.id} className="desk-slip-card">
-                                  <div className="desk-slip-header">
-                                    <div className="desk-slip-logo">CSWC</div>
-                                    <div className="desk-slip-title">SAY/IMP EXAM 2026</div>
+                              {chunk.map((cand) => {
+                                const candClass = cand.class || 'UNKNOWN CLASS';
+                                return (
+                                  <div key={cand.id} className="desk-slip-card">
+                                    <div className="desk-slip-header">
+                                      <div className="desk-slip-logo">CSWC</div>
+                                      <div className="desk-slip-title">SAY/IMP EXAM 2026</div>
+                                    </div>
+                                    <div className="desk-slip-body">
+                                      <div className="desk-slip-row">
+                                        <span className="desk-slip-label">Center:</span>
+                                        <span className="desk-slip-value" style={{ fontWeight: '800', textTransform: 'uppercase' }}>
+                                          [{group.centerCode}] {group.centerName.substring(0, 30)}{group.centerName.length > 30 ? '...' : ''}
+                                        </span>
+                                      </div>
+                                      
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0' }}>
+                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                          <span className="desk-slip-label">Seat No:</span>
+                                          <span className="desk-slip-seat-no">
+                                            {String(cand.seatNo).padStart(2, '0')}
+                                          </span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                          <span className="desk-slip-label">Class:</span>
+                                          <span className="desk-slip-class" style={{ whiteSpace: 'nowrap' }}>
+                                            {candClass.startsWith('PREVIOUS EXAM') ? candClass.replace('PREVIOUS EXAM / SAY ', '') : candClass}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="desk-slip-row">
+                                        <span className="desk-slip-label">Candidate Name:</span>
+                                        <span className="desk-slip-name">{cand.name}</span>
+                                      </div>
+                                      
+                                      <div className="desk-slip-row">
+                                        <span className="desk-slip-label">UID:</span>
+                                        <span className="desk-slip-uid">{cand.uid}</span>
+                                      </div>
+
+                                      <div className="desk-slip-row">
+                                        <span className="desk-slip-label">Subject:</span>
+                                        <span className="desk-slip-subject">{cand.subject}</span>
+                                      </div>
+
+                                      <div className="desk-slip-row-split">
+                                        <div>
+                                          <span className="desk-slip-label">Date:</span>
+                                          <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                            {new Date(group.slotDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="desk-slip-label">Session:</span>
+                                          <span className="desk-slip-value" style={{ fontSize: '10px' }}>
+                                            {group.slotSession.includes('FN') ? 'FN' : 'AN'} ({group.slotTime})
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="desk-slip-body">
-                                    <div className="desk-slip-row">
-                                      <span className="desk-slip-label">Center:</span>
-                                      <span className="desk-slip-value" style={{ fontWeight: '800', textTransform: 'uppercase' }}>
-                                        [{group.centerCode}] {group.centerName.substring(0, 30)}{group.centerName.length > 30 ? '...' : ''}
-                                      </span>
-                                    </div>
-                                    
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0' }}>
-                                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                        <span className="desk-slip-label">Seat No:</span>
-                                        <span className="desk-slip-seat-no">
-                                          {String(cand.seatNo).padStart(2, '0')}
-                                        </span>
-                                      </div>
-                                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                        <span className="desk-slip-label">Class:</span>
-                                        <span className="desk-slip-class" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>
-                                          {cand.class.startsWith('PREVIOUS EXAM') ? cand.class.replace('PREVIOUS EXAM / SAY ', '') : cand.class}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <div className="desk-slip-row">
-                                      <span className="desk-slip-label">Candidate Name:</span>
-                                      <span className="desk-slip-name">{cand.name}</span>
-                                    </div>
-                                    
-                                    <div className="desk-slip-row">
-                                      <span className="desk-slip-label">UID:</span>
-                                      <span className="desk-slip-uid">{cand.uid}</span>
-                                    </div>
-
-                                    <div className="desk-slip-row">
-                                      <span className="desk-slip-label">Subject:</span>
-                                      <span className="desk-slip-subject">{cand.subject}</span>
-                                    </div>
-
-                                    <div className="desk-slip-row-split">
-                                      <div>
-                                        <span className="desk-slip-label">Date:</span>
-                                        <span className="desk-slip-value" style={{ fontSize: '10px' }}>
-                                          {new Date(group.slotDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="desk-slip-label">Session:</span>
-                                        <span className="desk-slip-value" style={{ fontSize: '10px' }}>
-                                          {group.slotSession.includes('FN') ? 'FN' : 'AN'} ({group.slotTime})
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           );
                         })}

@@ -1059,24 +1059,24 @@ button, input, select, textarea {
 /* Print Specific Adjustments for Slips */
 @media print {
   .desk-slips-page {
-    height: 260mm !important; /* Fit within A4 printable area height */
+    height: 275mm !important; /* Fit within A4 printable area height */
     width: 100% !important;
-    max-height: 260mm !important;
+    max-height: 275mm !important;
     background-color: #fff !important;
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
-    gap: 8px !important;
+    gap: 6px !important;
   }
 
   .desk-slip-card {
-    height: 60mm !important; /* Fits 4 rows in A4 */
+    height: 52mm !important; /* Fits 5 rows in A4 perfectly (5 * 52mm = 260mm + gaps = ~272mm) */
     border: 1px dashed #000 !important;
     border-radius: 0 !important;
     background-color: #fff !important;
     color: #000 !important;
-    padding: 10px !important;
+    padding: 6px 10px !important; /* Smaller padding to fit text nicely */
     box-shadow: none !important;
   }
 
@@ -1086,28 +1086,62 @@ button, input, select, textarea {
 
   .desk-slip-logo {
     color: #000 !important;
+    font-size: 12px !important;
+  }
+
+  .desk-slip-title {
+    font-size: 10px !important;
+  }
+
+  .desk-slip-header {
+    border-bottom: 1px solid #000 !important;
+    margin-bottom: 4px !important;
+    padding-bottom: 4px !important;
+  }
+
+  .desk-slip-body {
+    gap: 3px !important;
+  }
+
+  .desk-slip-row {
+    gap: 1px !important;
+  }
+
+  .desk-slip-label {
+    font-size: 8px !important;
+  }
+
+  .desk-slip-value {
+    font-size: 11px !important;
   }
 
   .desk-slip-seat-no {
     background-color: #f2f2f2 !important;
     color: #000 !important;
     border: 1px solid #000 !important;
-    font-size: 18px !important;
+    font-size: 14px !important;
+    padding: 1px 6px !important;
   }
 
   .desk-slip-class {
     background-color: transparent !important;
     color: #000 !important;
     border: 1px solid #000 !important;
-    font-size: 14px !important;
+    font-size: 11px !important;
+    padding: 1px 6px !important;
+  }
+
+  .desk-slip-name {
+    font-size: 13px !important;
   }
 
   .desk-slip-uid {
     color: #000 !important;
+    font-size: 11px !important;
   }
 
-  .desk-slip-header {
-    border-bottom: 1px solid #000 !important;
+  .desk-slip-subject {
+    font-size: 11px !important;
   }
 }
 
