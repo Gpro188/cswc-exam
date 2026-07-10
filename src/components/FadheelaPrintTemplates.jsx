@@ -16,7 +16,7 @@ const numberToWords = (num) => {
   return str.trim() || 'zero';
 };
 
-export const FadheelaPrintTemplates = ({ data }) => {
+export const FadheelaPrintTemplates = ({ data, printMode = 'ALL' }) => {
   if (!data || !data.timetable || data.timetable.length === 0 || !data.centers || data.centers.length === 0) return null;
 
   // 1. Group assignments by unique Center Name
@@ -75,6 +75,9 @@ export const FadheelaPrintTemplates = ({ data }) => {
           departmentList: Array.from(session.activeDepartments).join(', ')
         };
       });
+
+      // 5. Sort sessions by date (optional, for neatness)
+      sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
       return {
         centerName: centerObj.centerName,
@@ -189,147 +192,198 @@ export const FadheelaPrintTemplates = ({ data }) => {
       `}</style>
 
       {uniqueCenters.map((centerObj, centerIdx) => {
-        const isVeryLastCenter = centerIdx === uniqueCenters.length - 1;
-        
         // Calculate all unique departments across all sessions for this center
         const allDepts = Object.keys(centerObj.departments).join(', ');
         
         return (
           <React.Fragment key={`center-${centerIdx}`}>
             {/* 0. CENTER MASTER PACK COVER (One per Center - for the outer parcel) */}
-            <div className="pack-cover-page page-break-after">
-              <div className="pack-cover-inner" style={{ border: '8px solid black' }}>
-                <div className="pack-cover-header" style={{ marginTop: '40px' }}>
-                  <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-                  <h3>Fadheela PG Examination {data.year}</h3>
-                  <div className="pack-cover-badge-top" style={{ backgroundColor: '#1e3a8a', padding: '12px 32px', fontSize: '18px' }}>
-                    CENTER MASTER PACK COVER
-                  </div>
-                </div>
-
-                <div className="pack-cover-body" style={{ marginTop: '40px' }}>
-                  <div className="pack-cover-meta-grid" style={{ borderWidth: '3px' }}>
-                    <div className="meta-row" style={{ padding: '20px' }}>
-                      <span className="meta-label" style={{ fontSize: '14px' }}>EXAM CENTER</span>
-                      <span className="meta-value bold" style={{ fontSize: '24px' }}>{centerObj.centerName}</span>
-                    </div>
-                    <div className="meta-row" style={{ padding: '20px' }}>
-                      <span className="meta-label" style={{ fontSize: '14px' }}>DEPARTMENTS INCLUDED</span>
-                      <span className="meta-value bold" style={{ fontSize: '18px', color: '#1e3a8a' }}>{allDepts}</span>
+            {(printMode === 'ALL' || printMode === 'MASTER_COVERS') && (
+              <div className="pack-cover-page page-break-after">
+                <div className="pack-cover-inner" style={{ border: '8px solid black' }}>
+                  <div className="pack-cover-header" style={{ marginTop: '40px' }}>
+                    <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                    <h3>Fadheela PG Examination {data.year}</h3>
+                    <div className="pack-cover-badge-top" style={{ backgroundColor: '#1e3a8a', padding: '12px 32px', fontSize: '18px' }}>
+                      CENTER MASTER PACK COVER
                     </div>
                   </div>
 
-                  <div style={{ marginTop: '50px', textAlign: 'center', border: '3px dashed black', padding: '40px' }}>
-                    <h1 style={{ margin: 0, textTransform: 'uppercase', letterSpacing: '2px', fontSize: '28px' }}>Confidential</h1>
-                    <h3 style={{ margin: '15px 0 0 0', color: '#444' }}>EXAMINATION MATERIALS ENCLOSED</h3>
-                    <p style={{ marginTop: '20px', fontSize: '16px', lineHeight: '1.6' }}>
-                      This parcel contains all Question Paper Packets and Attendance Sheet Covers for the sessions scheduled at this center.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pack-cover-footer" style={{ marginTop: '80px' }}>
-                  <div className="signature-section" style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-around' }}>
-                    <div className="sig-line" style={{ alignItems: 'center' }}>
-                      <span>___________________________</span>
-                      <strong style={{ marginTop: '10px' }}>DISPATCHED BY</strong>
+                  <div className="pack-cover-body" style={{ marginTop: '40px' }}>
+                    <div className="pack-cover-meta-grid" style={{ borderWidth: '3px' }}>
+                      <div className="meta-row" style={{ padding: '20px' }}>
+                        <span className="meta-label" style={{ fontSize: '14px' }}>EXAM CENTER</span>
+                        <span className="meta-value bold" style={{ fontSize: '24px' }}>{centerObj.centerName}</span>
+                      </div>
+                      <div className="meta-row" style={{ padding: '20px' }}>
+                        <span className="meta-label" style={{ fontSize: '14px' }}>DEPARTMENTS INCLUDED</span>
+                        <span className="meta-value bold" style={{ fontSize: '18px', color: '#1e3a8a' }}>{allDepts}</span>
+                      </div>
                     </div>
-                    <div className="sig-line" style={{ alignItems: 'center' }}>
-                      <span>___________________________</span>
-                      <strong style={{ marginTop: '10px' }}>RECEIVED BY (CENTER CHIEF)</strong>
+
+                    <div style={{ marginTop: '50px', textAlign: 'center', border: '3px dashed black', padding: '40px' }}>
+                      <h1 style={{ margin: 0, textTransform: 'uppercase', letterSpacing: '2px', fontSize: '28px' }}>Confidential</h1>
+                      <h3 style={{ margin: '15px 0 0 0', color: '#444' }}>EXAMINATION MATERIALS ENCLOSED</h3>
+                      <p style={{ marginTop: '20px', fontSize: '16px', lineHeight: '1.6' }}>
+                        This parcel contains all Question Paper Packets and Attendance Sheet Covers for the sessions scheduled at this center.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pack-cover-footer" style={{ marginTop: '80px' }}>
+                    <div className="signature-section" style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-around' }}>
+                      <div className="sig-line" style={{ alignItems: 'center' }}>
+                        <span>___________________________</span>
+                        <strong style={{ marginTop: '10px' }}>DISPATCHED BY</strong>
+                      </div>
+                      <div className="sig-line" style={{ alignItems: 'center' }}>
+                        <span>___________________________</span>
+                        <strong style={{ marginTop: '10px' }}>RECEIVED BY (CENTER CHIEF)</strong>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {centerObj.sessions.map((session, sIdx) => {
-              const isLastSessionInCenter = sIdx === centerObj.sessions.length - 1;
-
+              
               return (
                 <React.Fragment key={`session-${centerIdx}-${sIdx}`}>
-                  {/* 1. ATTENDANCE SHEETS COVER (One per session for the whole center) */}
-                  <div className="pack-cover-page page-break-after">
-                    <div className="pack-cover-inner">
-                      <div className="pack-cover-header">
-                        <h2>Council of Samastha Womens Colleges (CSWC)</h2>
-                        <h3>Fadheela PG Examination {data.year}</h3>
-                        <div className="pack-cover-badge-top" style={{ backgroundColor: '#0ea5e9' }}>ATTENDANCE SHEETS COVER</div>
-                      </div>
+                  {/* 1. SESSION PACK COVER (New - Unpack On Time) */}
+                  {(printMode === 'ALL' || printMode === 'SESSION_COVERS') && (
+                    <div className="pack-cover-page page-break-after">
+                      <div className="pack-cover-inner" style={{ border: '8px solid black' }}>
+                        <div className="pack-cover-header">
+                          <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                          <h3>Fadheela PG Examination {data.year}</h3>
+                          <div className="pack-cover-badge-top" style={{ backgroundColor: '#d97706' }}>SESSION PACK COVER</div>
+                        </div>
 
-                      <div className="pack-cover-body">
-                        <div className="pack-cover-meta-grid">
-                          <div className="meta-row">
-                            <span className="meta-label">EXAM CENTER</span>
-                            <span className="meta-value bold">{centerObj.centerName}</span>
-                          </div>
-                          <div className="meta-row">
-                            <span className="meta-label">DEPARTMENT(S) IN THIS SESSION</span>
-                            <span className="meta-value bold">{session.departmentList}</span>
-                          </div>
-                          <div className="meta-row-split">
+                        <div className="pack-cover-body">
+                          <div className="pack-cover-meta-grid">
                             <div className="meta-row">
-                              <span className="meta-label">EXAM DATE</span>
-                              <span className="meta-value bold">
-                                {new Date(session.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                              </span>
+                              <span className="meta-label">EXAM CENTER</span>
+                              <span className="meta-value bold">{centerObj.centerName}</span>
                             </div>
                             <div className="meta-row">
-                              <span className="meta-label">EXAM TIME</span>
-                              <span className="meta-value bold">{session.time}</span>
+                              <span className="meta-label">DEPARTMENT(S) IN THIS SESSION</span>
+                              <span className="meta-value bold">{session.departmentList}</span>
                             </div>
                           </div>
-                        </div>
 
-                        <div style={{ marginTop: '20px', border: '3px solid black', borderRadius: '8px', padding: '20px' }}>
-                          <h4 style={{ textAlign: 'center', fontSize: '18px', fontWeight: 'bold', marginBottom: '20px', textTransform: 'uppercase' }}>
-                            Attendance Sheets Enclosed For
-                          </h4>
-                          <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '16px', lineHeight: '1.8' }}>
-                            {session.subjects.map((sub, i) => (
-                               <li key={i} style={{ paddingLeft: '20px', color: '#111', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px dashed #ccc', paddingBottom: '8px' }}>
-                                 <span style={{ fontSize: '12px', color: '#666', marginRight: '8px', textTransform: 'uppercase' }}>[{sub.department}]</span>
-                                 {sub.subject}
-                               </li>
-                            ))}
-                          </ul>
-                        </div>
+                          <div style={{ marginTop: '30px', textAlign: 'center', border: '5px solid #b91c1c', padding: '20px', backgroundColor: '#fef2f2' }}>
+                            <h1 style={{ margin: 0, color: '#b91c1c', fontSize: '32px', textTransform: 'uppercase', letterSpacing: '1px' }}>CONFIDENTIAL</h1>
+                            <h2 style={{ margin: '15px 0', fontSize: '20px' }}>DO NOT UNPACK UNTIL:</h2>
+                            <div style={{ fontSize: '24px', fontWeight: '900', color: '#111' }}>
+                              {new Date(session.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br/>
+                              {session.time}
+                            </div>
+                          </div>
 
-                        <div className="pack-cover-count-container" style={{ marginTop: '30px' }}>
-                          <div className="count-label">TOTAL CANDIDATES IN SESSION</div>
-                          <div className="count-badge-large">{session.totalCandidates}</div>
-                          <div className="count-words">
-                            (In Words: <strong>{numberToWords(session.totalCandidates).toUpperCase()} ONLY</strong>)
+                          <div style={{ marginTop: '30px', border: '3px solid black', borderRadius: '8px', padding: '20px' }}>
+                            <h4 style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', margin: '0 0 15px 0', textTransform: 'uppercase' }}>
+                              Materials Enclosed Inside
+                            </h4>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>
+                              {session.subjects.map((sub, i) => (
+                                 <li key={i} style={{ paddingLeft: '20px', color: '#111', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px dashed #ccc', paddingBottom: '8px' }}>
+                                   <span style={{ fontSize: '12px', color: '#666', marginRight: '8px', textTransform: 'uppercase' }}>[{sub.department}]</span>
+                                   {sub.subject}
+                                 </li>
+                              ))}
+                            </ul>
                           </div>
-                        </div>
-                      </div>
 
-                      <div className="pack-cover-footer">
-                        <div className="signature-section">
-                          <div className="sig-line">
-                            <span>___________________________</span>
-                            <strong>PACKING CLERK</strong>
+                          <div className="pack-cover-count-container" style={{ marginTop: '20px' }}>
+                            <div className="count-label">TOTAL CANDIDATES IN SESSION</div>
+                            <div className="count-badge-large" style={{ width: '60px', height: '60px', fontSize: '32px' }}>{session.totalCandidates}</div>
                           </div>
-                          <div className="sig-line">
-                            <span>___________________________</span>
-                            <strong>CHIEF SUPERINTENDENT</strong>
-                          </div>
-                        </div>
-                        <div className="seal-box">
-                          OFFICE SEAL
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* 2. INDIVIDUAL SUBJECT COVERS FOR THIS SESSION */}
-                  {session.subjects.map((subject, subIdx) => {
-                    const isLastSubjectInSession = subIdx === session.subjects.length - 1;
-                    // We page break after EVERY subject, EXCEPT if it's the very last subject of the very last session of the very last center
-                    const shouldBreakAfter = !(isVeryLastCenter && isLastSessionInCenter && isLastSubjectInSession);
-                    
+                  {/* 2. ATTENDANCE SHEETS COVER (One per session for the whole center) */}
+                  {(printMode === 'ALL' || printMode === 'ATTENDANCE_COVERS') && (
+                    <div className="pack-cover-page page-break-after">
+                      <div className="pack-cover-inner">
+                        <div className="pack-cover-header">
+                          <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                          <h3>Fadheela PG Examination {data.year}</h3>
+                          <div className="pack-cover-badge-top" style={{ backgroundColor: '#0ea5e9' }}>ATTENDANCE SHEETS COVER</div>
+                        </div>
+
+                        <div className="pack-cover-body">
+                          <div className="pack-cover-meta-grid">
+                            <div className="meta-row">
+                              <span className="meta-label">EXAM CENTER</span>
+                              <span className="meta-value bold">{centerObj.centerName}</span>
+                            </div>
+                            <div className="meta-row">
+                              <span className="meta-label">DEPARTMENT(S) IN THIS SESSION</span>
+                              <span className="meta-value bold">{session.departmentList}</span>
+                            </div>
+                            <div className="meta-row-split">
+                              <div className="meta-row">
+                                <span className="meta-label">EXAM DATE</span>
+                                <span className="meta-value bold">
+                                  {new Date(session.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                </span>
+                              </div>
+                              <div className="meta-row">
+                                <span className="meta-label">EXAM TIME</span>
+                                <span className="meta-value bold">{session.time}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: '20px', border: '3px solid black', borderRadius: '8px', padding: '20px' }}>
+                            <h4 style={{ textAlign: 'center', fontSize: '18px', fontWeight: 'bold', marginBottom: '20px', textTransform: 'uppercase' }}>
+                              Attendance Sheets Enclosed For
+                            </h4>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '16px', lineHeight: '1.8' }}>
+                              {session.subjects.map((sub, i) => (
+                                 <li key={i} style={{ paddingLeft: '20px', color: '#111', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px dashed #ccc', paddingBottom: '8px' }}>
+                                   <span style={{ fontSize: '12px', color: '#666', marginRight: '8px', textTransform: 'uppercase' }}>[{sub.department}]</span>
+                                   {sub.subject}
+                                 </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="pack-cover-count-container" style={{ marginTop: '30px' }}>
+                            <div className="count-label">TOTAL CANDIDATES IN SESSION</div>
+                            <div className="count-badge-large">{session.totalCandidates}</div>
+                            <div className="count-words">
+                              (In Words: <strong>{numberToWords(session.totalCandidates).toUpperCase()} ONLY</strong>)
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pack-cover-footer">
+                          <div className="signature-section">
+                            <div className="sig-line">
+                              <span>___________________________</span>
+                              <strong>PACKING CLERK</strong>
+                            </div>
+                            <div className="sig-line">
+                              <span>___________________________</span>
+                              <strong>CHIEF SUPERINTENDENT</strong>
+                            </div>
+                          </div>
+                          <div className="seal-box">
+                            OFFICE SEAL
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. INDIVIDUAL SUBJECT COVERS FOR THIS SESSION */}
+                  {(printMode === 'ALL' || printMode === 'SUBJECT_COVERS') && session.subjects.map((subject, subIdx) => {
                     return (
-                      <div key={`sub-${centerIdx}-${sIdx}-${subIdx}`} className={`pack-cover-page ${shouldBreakAfter ? 'page-break-after' : ''}`}>
+                      <div key={`sub-${centerIdx}-${sIdx}-${subIdx}`} className="pack-cover-page page-break-after">
                         <div className="pack-cover-inner">
                           <div className="pack-cover-header">
                             <h2>Council of Samastha Womens Colleges (CSWC)</h2>

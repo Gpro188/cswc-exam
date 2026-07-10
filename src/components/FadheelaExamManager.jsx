@@ -11,6 +11,8 @@ const DEPARTMENTS = [
 ];
 
 export default function FadheelaExamManager({ institutions = [] }) {
+  const [printMode, setPrintMode] = useState('ALL');
+
   const [data, setData] = useState(() => {
     const saved = localStorage.getItem('fadheelaExamDataV3');
     if (saved) {
@@ -108,31 +110,46 @@ export default function FadheelaExamManager({ institutions = [] }) {
     });
   };
 
-  const handlePrint = () => {
+  const handlePrint = (mode) => {
     if (data.timetable.length === 0 || data.centers.length === 0) {
       alert('Please enter at least one Subject and at least one Exam Center.');
       return;
     }
-    window.print();
+    setPrintMode(mode);
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   return (
     <div className="view-container">
       <div className="no-print">
         {/* Action Header */}
-        <div className="header-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
-          <div>
-            <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.5rem' }}>Fadheela Bulk Print Engine</h2>
-            <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-              Configure your Master Schedule once, then bulk-generate pack covers for multiple centers and departments.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="header-actions" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.5rem' }}>Fadheela Bulk Print Engine</h2>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
+                Configure your Master Schedule once, then bulk-generate pack covers for multiple centers and departments.
+              </p>
+            </div>
             <button className="danger-btn" onClick={handleClearAll} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Trash2 size={18} /> Clear All Data
             </button>
-            <button className="primary-btn" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Printer size={18} /> Generate Covers for {data.centers.length} Assignments
+          </div>
+          
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '10px' }}>
+            <button className="primary-btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handlePrint('MASTER_COVERS')}>
+              <Printer size={16} /> Total Cover Data (Outer Box)
+            </button>
+            <button className="primary-btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handlePrint('SESSION_COVERS')}>
+              <Printer size={16} /> On Time Pack (Unpack On)
+            </button>
+            <button className="primary-btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handlePrint('ATTENDANCE_COVERS')}>
+              <Printer size={16} /> Attendance Covers
+            </button>
+            <button className="primary-btn" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handlePrint('SUBJECT_COVERS')}>
+              <Printer size={16} /> Subject Covers
             </button>
           </div>
         </div>
@@ -352,7 +369,7 @@ export default function FadheelaExamManager({ institutions = [] }) {
       </div>
 
       {/* Hidden print templates that are revealed by @media print */}
-      <FadheelaPrintTemplates data={data} />
+      <FadheelaPrintTemplates data={data} printMode={printMode} />
     </div>
   );
 }
