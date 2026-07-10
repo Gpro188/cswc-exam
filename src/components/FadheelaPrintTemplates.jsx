@@ -17,23 +17,8 @@ const numberToWords = (num) => {
 export const FadheelaPrintTemplates = ({ data }) => {
   if (!data || !data.timetable || data.timetable.length === 0 || !data.centers || data.centers.length === 0) return null;
 
-  // Group timetable by session (date + time)
-  // We do this once, and it doesn't need counts because the count comes from the center.
-  const sessions = useMemo(() => {
-    const map = {};
-    data.timetable.forEach(t => {
-      const key = `${t.date}_${t.time}`;
-      if (!map[key]) {
-        map[key] = {
-          date: t.date,
-          time: t.time,
-          subjects: []
-        };
-      }
-      map[key].subjects.push(t);
-    });
-    return Object.values(map);
-  }, [data.timetable]);
+  // We need to group sessions dynamically per department, because different departments have different subjects.
+  // Instead of grouping everything upfront, we'll do it inside the center loop based on the center's department.
 
   return (
     <div className="print-container theme-pack-cover" style={{ display: 'none' }}>
@@ -59,16 +44,26 @@ export const FadheelaPrintTemplates = ({ data }) => {
       `}</style>
 
       {data.centers.map((center, centerIdx) => {
+        // Find all subjects in the Master Schedule that match this center's assigned department
+        const departmentSubjects = data.timetable.filter(t => t.department === center.department);
+        
+        // Group the department subjects by session
+        const map = {};
+        departmentSubjects.forEach(t => {
+          const key = `${t.date}_${t.time}`;
+          if (!map[key]) {
+            map[key] = { date: t.date, time: t.time, subjects: [] };
+          }
+          map[key].subjects.push(t);
+        });
+        const sessions = Object.values(map);
+
         const isVeryLastCenter = centerIdx === data.centers.length - 1;
         
         return (
           <React.Fragment key={center.id}>
             {/* 1. ATTENDANCE SHEETS COVER (One per session) */}
             {sessions.map((session, sIdx) => {
-              const isLastSession = sIdx === sessions.length - 1;
-              const hasNoSubjects = data.timetable.length === 0;
-              // If there are no subjects at all, we don't break after the last session, 
-              // but we usually have subjects so we'll just break after every session cover.
               
               return (
                 <div key={`att-session-${sIdx}`} className="pack-cover-page page-break-after">
@@ -87,7 +82,7 @@ export const FadheelaPrintTemplates = ({ data }) => {
                         </div>
                         <div className="meta-row">
                           <span className="meta-label">DEPARTMENT</span>
-                          <span className="meta-value bold">{data.departmentName}</span>
+                          <span className="meta-value bold">{center.department}</span>
                         </div>
                         <div className="meta-row-split">
                           <div className="meta-row">
@@ -146,8 +141,8 @@ export const FadheelaPrintTemplates = ({ data }) => {
             })}
 
             {/* 2. INDIVIDUAL SUBJECT COVERS (Question Paper Packets) */}
-            {data.timetable.map((subject, idx) => {
-              const isLastSubject = idx === data.timetable.length - 1;
+            {departmentSubjects.map((subject, idx) => {
+              const isLastSubject = idx === departmentSubjects.length - 1;
               const shouldBreakAfter = !(isVeryLastCenter && isLastSubject);
               
               return (
@@ -167,7 +162,7 @@ export const FadheelaPrintTemplates = ({ data }) => {
                         </div>
                         <div className="meta-row">
                           <span className="meta-label">DEPARTMENT</span>
-                          <span className="meta-value bold">{data.departmentName}</span>
+                          <span className="meta-value bold">{center.department}</span>
                         </div>
                         <div className="meta-row-split">
                           <div className="meta-row">

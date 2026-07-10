@@ -2,9 +2,17 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Printer, Plus, Trash2, Calendar, Clock, BookOpen, Users, Building, AlertCircle } from 'lucide-react';
 import { FadheelaPrintTemplates } from './FadheelaPrintTemplates';
 
+const DEPARTMENTS = [
+  'THAFSEER',
+  'HADITH',
+  'FIQH',
+  'THASAWUF',
+  'LUGHA'
+];
+
 export default function FadheelaExamManager({ institutions = [] }) {
   const [data, setData] = useState(() => {
-    const saved = localStorage.getItem('fadheelaExamDataV2');
+    const saved = localStorage.getItem('fadheelaExamDataV3');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -13,21 +21,19 @@ export default function FadheelaExamManager({ institutions = [] }) {
       }
     }
     return {
-      departmentName: '',
       year: '2026',
-      timetable: [], // Master subjects: { id, date, time, subject }
-      centers: []    // Assigned centers: { id, centerName, count }
+      timetable: [], // { id, department, date, time, subject }
+      centers: []    // { id, centerName, department, count }
     };
   });
 
   useEffect(() => {
-    localStorage.setItem('fadheelaExamDataV2', JSON.stringify(data));
+    localStorage.setItem('fadheelaExamDataV3', JSON.stringify(data));
   }, [data]);
 
   const handleClearAll = () => {
     if (window.confirm('Are you sure you want to completely wipe all subjects and centers?')) {
       setData({
-        departmentName: '',
         year: '2026',
         timetable: [],
         centers: []
@@ -52,6 +58,7 @@ export default function FadheelaExamManager({ institutions = [] }) {
   ];
 
   const [newSubject, setNewSubject] = useState({
+    department: 'THAFSEER',
     date: '',
     time: '',
     subject: ''
@@ -59,19 +66,20 @@ export default function FadheelaExamManager({ institutions = [] }) {
 
   const [newCenter, setNewCenter] = useState({
     centerName: '',
+    department: 'THAFSEER',
     count: 0
   });
 
   const handleAddSubject = () => {
-    if (!newSubject.date || !newSubject.time || !newSubject.subject) {
-      alert('Please fill in Date, Time, and Subject correctly.');
+    if (!newSubject.date || !newSubject.time || !newSubject.subject || !newSubject.department) {
+      alert('Please fill in Department, Date, Time, and Subject correctly.');
       return;
     }
     setData({
       ...data,
       timetable: [...data.timetable, { ...newSubject, id: Date.now().toString() }]
     });
-    setNewSubject({ date: '', time: '', subject: '' });
+    setNewSubject({ ...newSubject, subject: '' }); // Keep date, time, and dept to speed up entry
   };
 
   const handleRemoveSubject = (id) => {
@@ -82,15 +90,15 @@ export default function FadheelaExamManager({ institutions = [] }) {
   };
 
   const handleAddCenter = () => {
-    if (!newCenter.centerName || newCenter.count <= 0) {
-      alert('Please select an Exam Center and enter a valid Student Count.');
+    if (!newCenter.centerName || newCenter.count <= 0 || !newCenter.department) {
+      alert('Please select an Exam Center, Department, and enter a valid Student Count.');
       return;
     }
     setData({
       ...data,
       centers: [...data.centers, { ...newCenter, id: Date.now().toString() }]
     });
-    setNewCenter({ centerName: '', count: 0 });
+    setNewCenter({ ...newCenter, centerName: '', count: 0 }); // Keep department to speed up entry
   };
 
   const handleRemoveCenter = (id) => {
@@ -101,8 +109,8 @@ export default function FadheelaExamManager({ institutions = [] }) {
   };
 
   const handlePrint = () => {
-    if (!data.departmentName || data.timetable.length === 0 || data.centers.length === 0) {
-      alert('Please enter Department, at least one Subject, and at least one Exam Center.');
+    if (data.timetable.length === 0 || data.centers.length === 0) {
+      alert('Please enter at least one Subject and at least one Exam Center.');
       return;
     }
     window.print();
@@ -116,7 +124,7 @@ export default function FadheelaExamManager({ institutions = [] }) {
           <div>
             <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.5rem' }}>Fadheela Bulk Print Engine</h2>
             <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-              Configure your Master Schedule once, then bulk-generate pack covers for multiple centers.
+              Configure your Master Schedule once, then bulk-generate pack covers for multiple centers and departments.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -124,24 +132,13 @@ export default function FadheelaExamManager({ institutions = [] }) {
               <Trash2 size={18} /> Clear All Data
             </button>
             <button className="primary-btn" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Printer size={18} /> Generate Covers for {data.centers.length} Centers
+              <Printer size={18} /> Generate Covers for {data.centers.length} Assignments
             </button>
           </div>
         </div>
 
         {/* Global Settings */}
         <div style={{ background: 'var(--surface)', padding: '1rem 1.5rem', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '1.5rem', display: 'flex', gap: '1.5rem' }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Department</label>
-            <input
-              type="text"
-              className="search-input"
-              style={{ width: '100%', padding: '10px' }}
-              placeholder="e.g. Islamic Studies"
-              value={data.departmentName}
-              onChange={(e) => setData({ ...data, departmentName: e.target.value })}
-            />
-          </div>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Exam Year</label>
             <input
@@ -155,7 +152,7 @@ export default function FadheelaExamManager({ institutions = [] }) {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
           
           {/* Left Column: Master Schedule */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -166,25 +163,38 @@ export default function FadheelaExamManager({ institutions = [] }) {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--background)', padding: '1rem', borderRadius: '8px', border: '1px dashed var(--border)' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Date</label>
-                  <input
-                    type="date"
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Department</label>
+                  <select
                     className="search-input"
                     style={{ width: '100%', padding: '10px' }}
-                    value={newSubject.date}
-                    onChange={(e) => setNewSubject({ ...newSubject, date: e.target.value })}
-                  />
+                    value={newSubject.department}
+                    onChange={(e) => setNewSubject({ ...newSubject, department: e.target.value })}
+                  >
+                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Time</label>
-                  <input
-                    type="text"
-                    placeholder="10:00 AM - 01:00 PM"
-                    className="search-input"
-                    style={{ width: '100%', padding: '10px' }}
-                    value={newSubject.time}
-                    onChange={(e) => setNewSubject({ ...newSubject, time: e.target.value })}
-                  />
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Date</label>
+                    <input
+                      type="date"
+                      className="search-input"
+                      style={{ width: '100%', padding: '10px' }}
+                      value={newSubject.date}
+                      onChange={(e) => setNewSubject({ ...newSubject, date: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Time</label>
+                    <input
+                      type="text"
+                      placeholder="10:00 AM - 01:00 PM"
+                      className="search-input"
+                      style={{ width: '100%', padding: '10px' }}
+                      value={newSubject.time}
+                      onChange={(e) => setNewSubject({ ...newSubject, time: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Subject Name</label>
@@ -198,7 +208,7 @@ export default function FadheelaExamManager({ institutions = [] }) {
                   />
                 </div>
                 <button className="primary-btn" onClick={handleAddSubject} style={{ width: '100%', justifyContent: 'center' }}>
-                  <Plus size={16} /> Add Subject
+                  <Plus size={16} /> Add Subject to {newSubject.department}
                 </button>
               </div>
 
@@ -212,8 +222,11 @@ export default function FadheelaExamManager({ institutions = [] }) {
                     {data.timetable.map(sub => (
                       <li key={sub.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--background)', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{sub.subject}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{sub.date} | {sub.time}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.7rem', background: 'var(--primary-light)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>{sub.department}</span>
+                            <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{sub.subject}</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>{sub.date} | {sub.time}</div>
                         </div>
                         <button onClick={() => handleRemoveSubject(sub.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}>
                           <Trash2 size={16} />
@@ -240,8 +253,8 @@ export default function FadheelaExamManager({ institutions = [] }) {
                 )}
               </div>
               
-              <div style={{ display: 'flex', gap: '1rem', background: 'var(--background)', padding: '1rem', borderRadius: '8px', border: '1px dashed var(--border)' }}>
-                <div style={{ flex: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--background)', padding: '1rem', borderRadius: '8px', border: '1px dashed var(--border)' }}>
+                <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Exam Center Name</label>
                   <select
                     className="search-input"
@@ -257,35 +270,34 @@ export default function FadheelaExamManager({ institutions = [] }) {
                     ))}
                   </select>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Student Count</label>
-                  <input
-                    type="number"
-                    min="1"
-                    className="search-input"
-                    style={{ width: '100%', padding: '10px' }}
-                    value={newCenter.count || ''}
-                    placeholder="0"
-                    onChange={(e) => setNewCenter({ ...newCenter, count: parseInt(e.target.value) || 0 })}
-                  />
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ flex: 2 }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Department</label>
+                    <select
+                      className="search-input"
+                      style={{ width: '100%', padding: '10px' }}
+                      value={newCenter.department}
+                      onChange={(e) => setNewCenter({ ...newCenter, department: e.target.value })}
+                    >
+                      {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Student Count</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="search-input"
+                      style={{ width: '100%', padding: '10px' }}
+                      value={newCenter.count || ''}
+                      placeholder="0"
+                      onChange={(e) => setNewCenter({ ...newCenter, count: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <button className="primary-btn" onClick={handleAddCenter} style={{ height: '41px' }}>
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Fallback input for manual center */}
-              <div style={{ marginTop: '8px' }}>
-                  <input
-                    type="text"
-                    className="search-input"
-                    style={{ width: '100%', padding: '8px' }}
-                    placeholder="Or type unlisted center manually..."
-                    value={newCenter.centerName}
-                    onChange={(e) => setNewCenter({ ...newCenter, centerName: e.target.value })}
-                  />
+                <button className="primary-btn" onClick={handleAddCenter} style={{ width: '100%', justifyContent: 'center' }}>
+                  <Plus size={16} /> Assign {newCenter.count || 0} students to {newCenter.department}
+                </button>
               </div>
 
               {/* Assigned Centers List */}
@@ -302,6 +314,7 @@ export default function FadheelaExamManager({ institutions = [] }) {
                       <thead>
                         <tr>
                           <th>Center</th>
+                          <th>Department</th>
                           <th style={{ textAlign: 'center' }}>Count</th>
                           <th style={{ textAlign: 'right' }}>Actions</th>
                         </tr>
@@ -310,6 +323,7 @@ export default function FadheelaExamManager({ institutions = [] }) {
                         {data.centers.map((c) => (
                           <tr key={c.id}>
                             <td style={{ fontSize: '0.875rem', fontWeight: 500 }}>{c.centerName}</td>
+                            <td style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--primary)' }}>{c.department}</td>
                             <td style={{ textAlign: 'center' }}>
                               <span style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.875rem', fontWeight: 'bold' }}>
                                 {c.count}
