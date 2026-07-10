@@ -188,8 +188,58 @@ export const FadheelaPrintTemplates = ({ data }) => {
       {uniqueCenters.map((centerObj, centerIdx) => {
         const isVeryLastCenter = centerIdx === uniqueCenters.length - 1;
         
+        // Calculate all unique departments across all sessions for this center
+        const allDepts = Object.keys(centerObj.departments).join(', ');
+        
         return (
           <React.Fragment key={`center-${centerIdx}`}>
+            {/* 0. CENTER MASTER PACK COVER (One per Center - for the outer parcel) */}
+            <div className="pack-cover-page page-break-after">
+              <div className="pack-cover-inner" style={{ border: '8px solid black' }}>
+                <div className="pack-cover-header" style={{ marginTop: '40px' }}>
+                  <h2>Council of Samastha Womens Colleges (CSWC)</h2>
+                  <h3>Fadheela PG Examination {data.year}</h3>
+                  <div className="pack-cover-badge-top" style={{ backgroundColor: '#1e3a8a', padding: '12px 32px', fontSize: '18px' }}>
+                    CENTER MASTER PACK COVER
+                  </div>
+                </div>
+
+                <div className="pack-cover-body" style={{ marginTop: '40px' }}>
+                  <div className="pack-cover-meta-grid" style={{ borderWidth: '3px' }}>
+                    <div className="meta-row" style={{ padding: '20px' }}>
+                      <span className="meta-label" style={{ fontSize: '14px' }}>EXAM CENTER</span>
+                      <span className="meta-value bold" style={{ fontSize: '24px' }}>{centerObj.centerName}</span>
+                    </div>
+                    <div className="meta-row" style={{ padding: '20px' }}>
+                      <span className="meta-label" style={{ fontSize: '14px' }}>DEPARTMENTS INCLUDED</span>
+                      <span className="meta-value bold" style={{ fontSize: '18px', color: '#1e3a8a' }}>{allDepts}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '50px', textAlign: 'center', border: '3px dashed black', padding: '40px' }}>
+                    <h1 style={{ margin: 0, textTransform: 'uppercase', letterSpacing: '2px', fontSize: '28px' }}>Confidential</h1>
+                    <h3 style={{ margin: '15px 0 0 0', color: '#444' }}>EXAMINATION MATERIALS ENCLOSED</h3>
+                    <p style={{ marginTop: '20px', fontSize: '16px', lineHeight: '1.6' }}>
+                      This parcel contains all Question Paper Packets and Attendance Sheet Covers for the sessions scheduled at this center.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pack-cover-footer" style={{ marginTop: '80px' }}>
+                  <div className="signature-section" style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-around' }}>
+                    <div className="sig-line" style={{ alignItems: 'center' }}>
+                      <span>___________________________</span>
+                      <strong style={{ marginTop: '10px' }}>DISPATCHED BY</strong>
+                    </div>
+                    <div className="sig-line" style={{ alignItems: 'center' }}>
+                      <span>___________________________</span>
+                      <strong style={{ marginTop: '10px' }}>RECEIVED BY (CENTER CHIEF)</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {centerObj.sessions.map((session, sIdx) => {
               const isLastSessionInCenter = sIdx === centerObj.sessions.length - 1;
 
