@@ -1,14 +1,39 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Printer, Plus, Trash2, Calendar, Clock, BookOpen, Users, MapPin, Edit } from 'lucide-react';
 import { FadheelaPrintTemplates } from './FadheelaPrintTemplates';
 
 export default function FadheelaExamManager({ institutions = [] }) {
-  const [data, setData] = useState({
-    centerName: '',
-    departmentName: '',
-    year: '2026',
-    timetable: []
+  const [data, setData] = useState(() => {
+    const saved = localStorage.getItem('fadheelaExamData');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved data', e);
+      }
+    }
+    return {
+      centerName: '',
+      departmentName: '',
+      year: '2026',
+      timetable: []
+    };
   });
+
+  useEffect(() => {
+    localStorage.setItem('fadheelaExamData', JSON.stringify(data));
+  }, [data]);
+
+  const handleClearForm = () => {
+    if (window.confirm('Are you sure you want to clear all data and start a new session?')) {
+      setData({
+        centerName: '',
+        departmentName: '',
+        year: '2026',
+        timetable: []
+      });
+    }
+  };
 
   const examCenters = useMemo(() => {
     return institutions.filter(i => i.isExamCenter);
@@ -69,9 +94,14 @@ export default function FadheelaExamManager({ institutions = [] }) {
               Configure offline exam materials and generate print-ready documents.
             </p>
           </div>
-          <button className="primary-btn" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Printer size={18} /> Generate Exam Pack
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="danger-btn" onClick={handleClearForm} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Trash2 size={18} /> Clear Data
+            </button>
+            <button className="primary-btn" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Printer size={18} /> Generate Exam Pack
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
