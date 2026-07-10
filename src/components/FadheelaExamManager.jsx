@@ -24,13 +24,12 @@ export default function FadheelaExamManager({ institutions = [] }) {
     localStorage.setItem('fadheelaExamData', JSON.stringify(data));
   }, [data]);
 
-  const handleClearForm = () => {
-    if (window.confirm('Are you sure you want to clear all data and start a new session?')) {
+  const handleNextCenter = () => {
+    if (window.confirm('Clear the Center and Counts to pack the next center? (Subjects and Times will be kept)')) {
       setData({
+        ...data,
         centerName: '',
-        departmentName: '',
-        year: '2026',
-        timetable: []
+        timetable: data.timetable.map(t => ({ ...t, count: 0 }))
       });
     }
   };
@@ -65,6 +64,13 @@ export default function FadheelaExamManager({ institutions = [] }) {
     });
   };
 
+  const handleUpdateSubjectCount = (id, newCount) => {
+    setData({
+      ...data,
+      timetable: data.timetable.map(t => t.id === id ? { ...t, count: newCount } : t)
+    });
+  };
+
   const handleEditSubject = (item) => {
     setNewSubject({
       date: item.date,
@@ -95,8 +101,8 @@ export default function FadheelaExamManager({ institutions = [] }) {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="danger-btn" onClick={handleClearForm} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Trash2 size={18} /> Clear Data
+            <button className="danger-btn" onClick={handleNextCenter} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Trash2 size={18} /> Next Center (Clear Counts)
             </button>
             <button className="primary-btn" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Printer size={18} /> Generate Exam Pack
@@ -210,15 +216,16 @@ export default function FadheelaExamManager({ institutions = [] }) {
                 </div>
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Student Count</label>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Student Count (Optional here)</label>
                 <div style={{ position: 'relative' }}>
                   <Users size={18} style={{ position: 'absolute', left: '12px', top: '10px', color: 'var(--text-muted)' }} />
                   <input
                     type="number"
-                    min="1"
+                    min="0"
                     className="search-input"
                     style={{ width: '100%', padding: '10px 10px 10px 36px' }}
                     value={newSubject.count || ''}
+                    placeholder="0"
                     onChange={(e) => setNewSubject({ ...newSubject, count: parseInt(e.target.value) || 0 })}
                   />
                 </div>
@@ -259,10 +266,15 @@ export default function FadheelaExamManager({ institutions = [] }) {
                         <td><strong>{item.date}</strong></td>
                         <td style={{ color: 'var(--text-muted)' }}>{item.time}</td>
                         <td>{item.subject}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span style={{ background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                            {item.count}
-                          </span>
+                        <td style={{ textAlign: 'center', width: '120px' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            className="search-input"
+                            style={{ width: '80px', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}
+                            value={item.count || ''}
+                            onChange={(e) => handleUpdateSubjectCount(item.id, parseInt(e.target.value) || 0)}
+                          />
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <button 
@@ -293,10 +305,9 @@ export default function FadheelaExamManager({ institutions = [] }) {
               <div style={{ marginTop: '2rem', padding: '1rem', background: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <h4 style={{ margin: '0 0 12px 0', fontSize: '0.875rem', color: 'var(--text-muted)' }}>Generation Preview:</h4>
                 <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.875rem', color: 'var(--text-main)' }}>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }}></div> 1x Pack Cover Page</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }}></div> 1x Admin Document Checklist</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }}></div> 1x Schedule & Seating Overview</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }}></div> {data.timetable.length}x Attendance Sheets</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }}></div> 1x Admin Master Cover</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }}></div> {new Set(data.timetable.map(t => t.date + t.time)).size}x Session Exam Packet Covers</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }}></div> {data.timetable.length}x Subject Question Paper Covers</li>
                 </ul>
               </div>
             )}
