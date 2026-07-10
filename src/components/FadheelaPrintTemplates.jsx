@@ -12,18 +12,18 @@ export const FadheelaPrintTemplates = ({ data }) => {
           body * {
             visibility: hidden;
           }
-          .app-container, .app-sidebar, .content-header, .no-print {
+          .app-sidebar, .content-header, .no-print {
             display: none !important;
           }
           .print-container, .print-container * {
             visibility: visible;
           }
           .print-container {
-            display: block !important;
             position: absolute;
             left: 0;
             top: 0;
             width: 100%;
+            display: block !important;
           }
           .page-break {
             page-break-after: always;

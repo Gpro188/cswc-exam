@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
-import { Printer, Plus, Trash2, Calendar, Clock, BookOpen, Users, MapPin } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Printer, Plus, Trash2, Calendar, Clock, BookOpen, Users, MapPin, Edit } from 'lucide-react';
 import { FadheelaPrintTemplates } from './FadheelaPrintTemplates';
 
-export default function FadheelaExamManager() {
+export default function FadheelaExamManager({ institutions = [] }) {
   const [data, setData] = useState({
     centerName: '',
     departmentName: '',
     year: '2026',
     timetable: []
   });
+
+  const examCenters = useMemo(() => {
+    return institutions.filter(i => i.isExamCenter);
+  }, [institutions]);
 
   const [newSubject, setNewSubject] = useState({
     date: '',
@@ -36,6 +40,16 @@ export default function FadheelaExamManager() {
     });
   };
 
+  const handleEditSubject = (item) => {
+    setNewSubject({
+      date: item.date,
+      time: item.time,
+      subject: item.subject,
+      count: item.count
+    });
+    handleRemoveSubject(item.id);
+  };
+
   const handlePrint = () => {
     if (!data.centerName || !data.departmentName || data.timetable.length === 0) {
       alert('Please enter Center, Department, and at least one Subject before generating documents.');
@@ -46,20 +60,21 @@ export default function FadheelaExamManager() {
 
   return (
     <div className="view-container">
-      {/* Action Header */}
-      <div className="header-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
-        <div>
-          <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.5rem' }}>Fadheela PG Examination</h2>
-          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-            Configure offline exam materials and generate print-ready documents.
-          </p>
+      <div className="no-print">
+        {/* Action Header */}
+        <div className="header-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <div>
+            <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.5rem' }}>Fadheela PG Examination</h2>
+            <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
+              Configure offline exam materials and generate print-ready documents.
+            </p>
+          </div>
+          <button className="primary-btn" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Printer size={18} /> Generate Exam Pack
+          </button>
         </div>
-        <button className="primary-btn" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Printer size={18} /> Generate Exam Pack
-        </button>
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
         {/* Left Column: Form Settings */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border)' }}>
@@ -69,11 +84,26 @@ export default function FadheelaExamManager() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Exam Center Name / Code</label>
+                <select
+                  className="search-input"
+                  style={{ width: '100%', padding: '10px' }}
+                  value={data.centerName}
+                  onChange={(e) => setData({ ...data, centerName: e.target.value })}
+                >
+                  <option value="">-- Select Center --</option>
+                  {examCenters.map(center => (
+                    <option key={center.code} value={`${center.name} - ${center.place}`}>
+                      {center.name} ({center.code}) - {center.place}
+                    </option>
+                  ))}
+                  {/* Fallback for manual entry if they want to type one not in list, though a select restricts this. If needed, we can keep the input or just use select. */}
+                </select>
+                {/* Fallback input in case they want to type manually */}
                 <input
                   type="text"
                   className="search-input"
-                  style={{ width: '100%', padding: '10px' }}
-                  placeholder="e.g. Center A (C-001)"
+                  style={{ width: '100%', padding: '10px', marginTop: '8px' }}
+                  placeholder="Or type center manually..."
                   value={data.centerName}
                   onChange={(e) => setData({ ...data, centerName: e.target.value })}
                 />
@@ -206,6 +236,14 @@ export default function FadheelaExamManager() {
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <button 
+                            onClick={() => handleEditSubject(item)}
+                            className="primary-btn"
+                            style={{ padding: '6px', marginRight: '8px', background: 'var(--primary-light)', color: 'var(--primary)' }}
+                            title="Edit subject"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
                             onClick={() => handleRemoveSubject(item.id)}
                             className="danger-btn"
                             style={{ padding: '6px' }}
@@ -234,6 +272,7 @@ export default function FadheelaExamManager() {
             )}
           </div>
         </div>
+      </div>
       </div>
 
       {/* Hidden print templates that are revealed by @media print */}

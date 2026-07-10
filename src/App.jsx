@@ -411,7 +411,7 @@ function App() {
           />
         );
       case 'fadheela':
-        return <FadheelaExamManager />;
+        return <FadheelaExamManager institutions={institutions} />;
       default:
         return <div>View not found</div>;
     }
