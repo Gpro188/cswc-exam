@@ -15,6 +15,7 @@ import TimeTable from './components/TimeTable';
 import PreviousSayStudents from './components/PreviousSayStudents';
 import Reports from './components/Reports';
 import DataImport from './components/DataImport';
+import FadheelaExamManager from './components/FadheelaExamManager';
 
 // Icons
 import { 
@@ -409,6 +410,8 @@ function App() {
             onAddPreviousStudent={handleAddPreviousStudent}
           />
         );
+      case 'fadheela':
+        return <FadheelaExamManager />;
       default:
         return <div>View not found</div>;
     }
@@ -424,6 +427,7 @@ function App() {
       case 'previous': return 'Previous SAY Candidates Uploader';
       case 'reports': return 'Print Office Reports & Center Lists';
       case 'import': return 'Database Import & Settings';
+      case 'fadheela': return 'Fadheela PG Exam Pack';
       default: return 'CSWC Exam Panel';
     }
   };
@@ -438,6 +442,7 @@ function App() {
       case 'previous': return 'Upload external previous exam SAY student spreadsheets';
       case 'reports': return 'Export summaries, packing counts, and print attendance registers';
       case 'import': return 'Upload new schools, append student registries, and database backups';
+      case 'fadheela': return 'Configure offline exam materials and generate print-ready documents';
       default: return '';
     }
   };
@@ -501,6 +506,11 @@ function App() {
           <li className={`menu-item ${activeTab === 'import' ? 'active' : ''}`}>
             <button onClick={() => handleTabChange('import')}>
               <Settings size={18} /> Settings & Import
+            </button>
+          </li>
+          <li className={`menu-item ${activeTab === 'fadheela' ? 'active' : ''}`}>
+            <button onClick={() => handleTabChange('fadheela')}>
+              <FileText size={18} /> Fadheela PG Exam
             </button>
           </li>
         </ul>
