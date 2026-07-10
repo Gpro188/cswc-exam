@@ -94,11 +94,12 @@ export const FadheelaPrintTemplates = ({ data }) => {
         
         .pack-cover-page {
           width: 210mm;
-          min-height: 297mm;
-          padding: 20mm;
+          height: 296mm;
+          padding: 12mm;
           box-sizing: border-box;
           background: white;
           position: relative;
+          overflow: hidden;
         }
         .page-break-after {
           page-break-after: always;
@@ -110,77 +111,78 @@ export const FadheelaPrintTemplates = ({ data }) => {
           height: 100%;
           display: flex;
           flex-direction: column;
+          box-sizing: border-box;
         }
         .pack-cover-header {
           text-align: center;
-          margin-bottom: 20px;
+          margin-bottom: 12px;
         }
-        .pack-cover-header h2 { font-size: 22px; font-weight: 900; margin: 0 0 10px 0; text-transform: uppercase; }
-        .pack-cover-header h3 { font-size: 16px; font-weight: bold; margin: 0 0 15px 0; color: #444; }
+        .pack-cover-header h2 { font-size: 18px; font-weight: 900; margin: 0 0 6px 0; text-transform: uppercase; }
+        .pack-cover-header h3 { font-size: 14px; font-weight: bold; margin: 0 0 10px 0; color: #444; }
         .pack-cover-badge-top {
           display: inline-block;
-          padding: 8px 24px;
+          padding: 6px 20px;
           border-radius: 4px;
           font-weight: bold;
-          font-size: 14px;
+          font-size: 13px;
           text-transform: uppercase;
           letter-spacing: 1px;
           color: white;
           background-color: #333;
         }
         
-        .pack-cover-meta-grid { border: 2px solid black; margin-bottom: 20px; }
-        .meta-row { display: flex; border-bottom: 1px solid black; padding: 8px 12px; align-items: flex-start; flex-direction: column; }
+        .pack-cover-meta-grid { border: 2px solid black; margin-bottom: 12px; }
+        .meta-row { display: flex; border-bottom: 1px solid black; padding: 6px 10px; align-items: flex-start; flex-direction: column; }
         .meta-row:last-child { border-bottom: none; }
         .meta-row-split { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid black; }
         .meta-row-split .meta-row { border-bottom: none; border-right: 1px solid black; }
         .meta-row-split .meta-row:last-child { border-right: none; }
         
-        .meta-label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 4px; }
-        .meta-value { font-size: 15px; font-weight: bold; color: #000; }
+        .meta-label { font-size: 9px; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+        .meta-value { font-size: 13px; font-weight: bold; color: #000; }
         
         .pack-cover-subject-box {
           border: 2px solid black;
           display: flex;
           text-align: center;
-          margin-bottom: 20px;
+          margin-bottom: 12px;
           flex-direction: column;
         }
-        .sub-field { padding: 12px; }
-        .sub-label { display: block; font-size: 11px; font-weight: bold; color: #666; margin-bottom: 6px; }
-        .sub-value { display: block; font-size: 24px; font-weight: 900; }
-        .subject-highlight { font-family: "Traditional Arabic", "Amiri", serif; font-size: 28px; line-height: 1.4; padding: 10px 0; }
+        .sub-field { padding: 8px; }
+        .sub-label { display: block; font-size: 10px; font-weight: bold; color: #666; margin-bottom: 4px; }
+        .sub-value { display: block; font-size: 18px; font-weight: 900; }
+        .subject-highlight { font-family: "Traditional Arabic", "Amiri", serif; font-size: 24px; line-height: 1.2; padding: 4px 0; }
         .class-highlight { color: #1e3a8a; }
         
-        .pack-cover-count-container { text-align: center; margin: 30px 0; }
-        .count-label { font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; }
+        .pack-cover-count-container { text-align: center; margin: 15px 0; }
+        .count-label { font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; }
         .count-badge-large {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 100px;
-          height: 100px;
-          border: 5px solid black;
-          font-size: 64px;
+          width: 80px;
+          height: 80px;
+          border: 4px solid black;
+          font-size: 48px;
           font-weight: 900;
-          margin: 0 auto 15px;
+          margin: 0 auto 10px;
         }
-        .count-words { font-size: 13px; font-weight: 500; }
+        .count-words { font-size: 12px; font-weight: 500; }
         
-        .pack-cover-footer { margin-top: auto; padding-top: 40px; position: relative; display: flex; justify-content: space-between; align-items: flex-end; }
-        .signature-section { width: 60%; display: flex; flex-direction: column; gap: 40px; }
+        .pack-cover-footer { margin-top: auto; padding-top: 15px; position: relative; display: flex; justify-content: space-between; align-items: flex-end; }
+        .signature-section { width: 60%; display: flex; flex-direction: column; gap: 25px; }
         .sig-line { display: flex; flex-direction: column; align-items: flex-start; }
-        .sig-line span { margin-bottom: 5px; color: #999; }
-        .sig-line strong { font-size: 12px; }
+        .sig-line span { margin-bottom: 4px; color: #999; }
+        .sig-line strong { font-size: 11px; }
         
         .seal-box {
-          width: 120px;
-          height: 120px;
+          width: 100px;
+          height: 100px;
           border: 1px dashed black;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: bold;
           color: #999;
         }
