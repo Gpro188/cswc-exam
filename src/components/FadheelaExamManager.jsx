@@ -44,9 +44,12 @@ export default function FadheelaExamManager({ institutions = [] }) {
     }
   };
 
-  const examCenters = useMemo(() => {
-    return institutions.filter(i => i.isExamCenter);
-  }, [institutions]);
+  const pgCenters = [
+    "MSA WOMEN'S COLLEGE, THALASSERY - THRISSUR",
+    "TWAIBA ISLAMIC WOMEN'S COLLEGE, CHERPULASSERRI - PALAKKAD",
+    "SAYED HYDERALI SHIHAB THANGAL MEMORIAL SAMASTHA FADHILA COLLEGE, VALIYAD - MALAPPURAM",
+    "MUNAVVIRUL ISLAM SAMASTHA FADHEELA WOMEN'S COLLEGE, TRIKARIPUR - KASARAGOD"
+  ];
 
   const [newSubject, setNewSubject] = useState({
     date: '',
@@ -246,10 +249,10 @@ export default function FadheelaExamManager({ institutions = [] }) {
                     value={newCenter.centerName}
                     onChange={(e) => setNewCenter({ ...newCenter, centerName: e.target.value })}
                   >
-                    <option value="">-- Select --</option>
-                    {examCenters.map(center => (
-                      <option key={center.code} value={`${center.name} - ${center.place}`}>
-                        {center.name} ({center.code}) - {center.place}
+                    <option value="">-- Select PG Center --</option>
+                    {pgCenters.map((center, idx) => (
+                      <option key={idx} value={center}>
+                        {center}
                       </option>
                     ))}
                   </select>
