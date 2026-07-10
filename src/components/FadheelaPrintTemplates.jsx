@@ -78,6 +78,7 @@ export const FadheelaPrintTemplates = ({ data }) => {
 
       return {
         centerName: centerObj.centerName,
+        departments: centerObj.departments,
         sessions: sessions
       };
     });
