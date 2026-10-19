@@ -16,6 +16,7 @@ import PreviousSayStudents from './components/PreviousSayStudents';
 import Reports from './components/Reports';
 import DataImport from './components/DataImport';
 import FadheelaExamManager from './components/FadheelaExamManager';
+import ExamSeatArrangementManager from './components/ExamSeatArrangementManager';
 
 // Icons
 import { 
@@ -30,7 +31,8 @@ import {
   School,
   Loader,
   Menu,
-  X
+  X,
+  Armchair
 } from 'lucide-react';
 
 function App() {
@@ -412,6 +414,8 @@ function App() {
         );
       case 'fadheela':
         return <FadheelaExamManager institutions={institutions} />;
+      case 'seating':
+        return <ExamSeatArrangementManager />;
       default:
         return <div>View not found</div>;
     }
@@ -420,6 +424,7 @@ function App() {
   const getViewTitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Dashboard Overview';
+      case 'seating': return 'Exam Seat Arrangement System';
       case 'allocation': return 'Exam Center Designation & Mapping';
       case 'registrations': return 'Student Registrations';
       case 'timetable': return 'Exam Schedule & Time Table';
@@ -435,6 +440,7 @@ function App() {
   const getViewSubtitle = () => {
     switch (activeTab) {
       case 'dashboard': return 'Summary statistics and active zone allocations';
+      case 'seating': return 'Hall bench configuration, Excel student import, anti-cheating seat generator & print plans';
       case 'allocation': return 'Designate exam centers and map schools to centers zone-wise';
       case 'registrations': return 'Search, filter, and view registered candidates';
       case 'timetable': return 'Assign exam dates and sessions to subjects';
@@ -506,6 +512,11 @@ function App() {
           <li className={`menu-item ${activeTab === 'import' ? 'active' : ''}`}>
             <button onClick={() => handleTabChange('import')}>
               <Settings size={18} /> Settings & Import
+            </button>
+          </li>
+          <li className={`menu-item ${activeTab === 'seating' ? 'active' : ''}`}>
+            <button onClick={() => handleTabChange('seating')} style={{ color: activeTab === 'seating' ? undefined : '#a5b4fc', fontWeight: activeTab === 'seating' ? 700 : 500 }}>
+              <Armchair size={18} /> Seating Arrangement
             </button>
           </li>
           <li className={`menu-item ${activeTab === 'fadheela' ? 'active' : ''}`}>
