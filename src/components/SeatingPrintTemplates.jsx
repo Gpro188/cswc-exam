@@ -90,8 +90,9 @@ export default function SeatingPrintTemplates({
             onClick={handlePrint}
             className="btn btn-primary"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontWeight: 700, borderRadius: '8px' }}
+            title="Click to print or select 'Save as PDF' in the destination dropdown"
           >
-            <Printer size={18} /> Print Document
+            <Printer size={18} /> Print / Save as PDF
           </button>
           <button
             onClick={onClose}
