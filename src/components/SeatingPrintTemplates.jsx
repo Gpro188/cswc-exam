@@ -1,13 +1,29 @@
-import React, { useRef } from 'react';
-import { Printer, Download, CheckCircle, School, Calendar, Clock, MapPin } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { 
+  Printer, 
+  Download, 
+  CheckCircle, 
+  School, 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Package, 
+  Tag, 
+  FileText, 
+  Layers, 
+  Users 
+} from 'lucide-react';
 
 export default function SeatingPrintTemplates({
   examDetails = {},
   arrangement = null,
-  activePrintType = 'hall_plan', // 'hall_plan' | 'hall_roster' | 'student_notice'
+  activePrintType: initialPrintType = 'all_in_one', // 'all_in_one' | 'qp_packing' | 'bench_slips' | 'hall_plan' | 'hall_roster' | 'student_notice'
   onClose
 }) {
   const printRef = useRef();
+  const [currentPrintType, setCurrentPrintType] = useState(initialPrintType);
+  const [slipBenchFilter, setSlipBenchFilter] = useState('all'); // 'all' or hallId
+  const [slipsPerPage, setSlipsPerPage] = useState(8); // 8 or 12 per page
 
   if (!arrangement) return null;
 
@@ -17,13 +33,43 @@ export default function SeatingPrintTemplates({
 
   const hallAllocations = arrangement.hallAllocations || [];
 
-  // Group all placed students by class for the class announcement list
+  // 1. Group all placed students by class for the class announcement list
   const studentsByClass = {};
+  // 2. Extract all flat seat list for bench sticker slips
+  const allSeatSlips = [];
+  // 3. Question paper packing counts: Group by Hall -> Class, and Class -> Hall
+  const hallClassCounts = {}; // { [hallId]: { hallName, totalStudents, classes: { [className]: count } } }
+  const classHallCounts = {}; // { [className]: { total: 0, halls: { [hallName]: count } } }
+  let grandTotalStudents = 0;
+
   hallAllocations.forEach(hall => {
+    if (!hallClassCounts[hall.hallId]) {
+      hallClassCounts[hall.hallId] = {
+        hallId: hall.hallId,
+        hallName: hall.hallName,
+        totalStudents: 0,
+        classes: {}
+      };
+    }
+
     hall.benches.forEach(bench => {
       bench.seats.forEach(seat => {
         if (seat.student) {
+          grandTotalStudents++;
           const cName = seat.student.className || 'General';
+
+          // Hall -> Class count
+          hallClassCounts[hall.hallId].totalStudents++;
+          hallClassCounts[hall.hallId].classes[cName] = (hallClassCounts[hall.hallId].classes[cName] || 0) + 1;
+
+          // Class -> Hall count
+          if (!classHallCounts[cName]) {
+            classHallCounts[cName] = { total: 0, halls: {} };
+          }
+          classHallCounts[cName].total++;
+          classHallCounts[cName].halls[hall.hallName] = (classHallCounts[cName].halls[hall.hallName] || 0) + 1;
+
+          // Group by class
           if (!studentsByClass[cName]) {
             studentsByClass[cName] = [];
           }
@@ -31,8 +77,24 @@ export default function SeatingPrintTemplates({
             rollNo: seat.student.rollNo,
             name: seat.student.name,
             hallName: hall.hallName,
+            hallId: hall.hallId,
             benchNumber: bench.benchNumber,
-            seatPosition: seat.seatPositionName
+            seatPosition: seat.seatPositionName,
+            rowNum: bench.rowNum,
+            colNum: bench.colNum
+          });
+
+          // All seat slips
+          allSeatSlips.push({
+            hallId: hall.hallId,
+            hallName: hall.hallName,
+            benchNumber: bench.benchNumber,
+            seatPosition: seat.seatPositionName,
+            rowNum: bench.rowNum,
+            colNum: bench.colNum,
+            rollNo: seat.student.rollNo,
+            name: seat.student.name,
+            className: cName
           });
         }
       });
@@ -44,6 +106,20 @@ export default function SeatingPrintTemplates({
     studentsByClass[cls].sort((a, b) => a.rollNo.localeCompare(b.rollNo, undefined, { numeric: true }));
   });
 
+  // Filtered slips
+  const filteredSlips = slipBenchFilter === 'all' 
+    ? allSeatSlips 
+    : allSeatSlips.filter(s => s.hallId === slipBenchFilter);
+
+  // Chunk slips for printing pages
+  const slipChunks = [];
+  const chunkSize = slipsPerPage;
+  for (let i = 0; i < filteredSlips.length; i += chunkSize) {
+    slipChunks.push(filteredSlips.slice(i, i + chunkSize));
+  }
+
+  const allUniqueClasses = Object.keys(classHallCounts).sort();
+
   return (
     <div className="seating-print-modal" style={{
       position: 'fixed',
@@ -51,57 +127,171 @@ export default function SeatingPrintTemplates({
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(15, 23, 42, 0.75)',
-      backdropFilter: 'blur(4px)',
+      background: 'rgba(15, 23, 42, 0.8)',
+      backdropFilter: 'blur(5px)',
       zIndex: 2000,
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      padding: '20px',
+      padding: '16px',
       overflowY: 'auto'
     }}>
       {/* Control Bar - Not printed */}
       <div className="no-print" style={{
         background: '#fff',
         borderRadius: '12px',
-        padding: '12px 24px',
+        padding: '14px 20px',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        flexDirection: 'column',
+        gap: '12px',
         width: '100%',
-        maxWidth: '1000px',
+        maxWidth: '1080px',
         marginBottom: '16px',
-        boxShadow: 'var(--shadow-lg)'
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Printer size={22} color="var(--primary)" />
-          <div>
-            <h4 style={{ margin: 0, fontWeight: 700 }}>Print Preview & Export</h4>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {activePrintType === 'hall_plan' && 'Visual Hall Seating Plan & Bench Map'}
-              {activePrintType === 'hall_roster' && 'Hall-wise Detailed Seating Roster'}
-              {activePrintType === 'student_notice' && 'Class-wise Student Notice Board Announcement'}
-            </span>
+        {/* Top bar title & print buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: '#e0e7ff', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Printer size={24} color="#3730a3" />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.15rem', color: '#1e293b' }}>
+                Print & Export Seating Center Suite
+              </h3>
+              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                Total Seated: <strong>{grandTotalStudents}</strong> Students across <strong>{hallAllocations.length}</strong> Examination Halls
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              onClick={handlePrint}
+              className="btn btn-primary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 22px',
+                fontWeight: 800,
+                fontSize: '0.95rem',
+                borderRadius: '8px',
+                backgroundColor: '#2563eb',
+                color: '#fff',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)'
+              }}
+              title="Click to print or save as PDF"
+            >
+              <Printer size={18} /> Print Now / Save as PDF
+            </button>
+            <button
+              onClick={onClose}
+              className="btn btn-secondary"
+              style={{
+                padding: '10px 18px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                background: '#f8fafc',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={handlePrint}
-            className="btn btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', fontWeight: 700, borderRadius: '8px' }}
-            title="Click to print or select 'Save as PDF' in the destination dropdown"
-          >
-            <Printer size={18} /> Print / Save as PDF
-          </button>
-          <button
-            onClick={onClose}
-            className="btn btn-secondary"
-            style={{ padding: '10px 16px', borderRadius: '8px' }}
-          >
-            Close
-          </button>
+        {/* Navigation tabs for selecting document type */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          borderTop: '1px solid #e2e8f0',
+          paddingTop: '12px',
+          flexWrap: 'wrap'
+        }}>
+          {[
+            { id: 'all_in_one', label: '📄 Complete Full Bundle (All Data)', icon: Layers, highlight: true },
+            { id: 'qp_packing', label: '📦 QP Packing Summary (Class-wise to Hall)', icon: Package },
+            { id: 'bench_slips', label: '🏷️ Bench Seat Slips (Stickers to Stick on Desks)', icon: Tag },
+            { id: 'hall_plan', label: '🗺️ Visual Hall Plan (Bench Map)', icon: FileText },
+            { id: 'hall_roster', label: '📋 Hall Attendance Roster', icon: Users },
+            { id: 'student_notice', label: '📢 Notice Board Announcement', icon: School }
+          ].map(tab => {
+            const IconComp = tab.icon;
+            const isActive = currentPrintType === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setCurrentPrintType(tab.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  fontSize: '0.825rem',
+                  fontWeight: isActive ? 700 : 500,
+                  border: isActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
+                  background: isActive ? '#eff6ff' : (tab.highlight ? '#fefce8' : '#fff'),
+                  color: isActive ? '#1d4ed8' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <IconComp size={15} />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
+
+        {/* Bench Slips Extra Filter Bar */}
+        {currentPrintType === 'bench_slips' && (
+          <div style={{
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            padding: '10px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            fontSize: '0.85rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontWeight: 700, color: '#334155' }}>Filter Hall for Slips:</span>
+              <select
+                value={slipBenchFilter}
+                onChange={(e) => setSlipBenchFilter(e.target.value)}
+                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              >
+                <option value="all">All Halls ({allSeatSlips.length} Slips)</option>
+                {hallAllocations.map(h => (
+                  <option key={h.hallId} value={h.hallId}>
+                    {h.hallName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontWeight: 700, color: '#334155' }}>Stickers Per Sheet:</span>
+              <select
+                value={slipsPerPage}
+                onChange={(e) => setSlipsPerPage(Number(e.target.value))}
+                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              >
+                <option value={8}>8 per page (2 columns × 4 rows - Standard Bench Size)</option>
+                <option value={10}>10 per page (2 columns × 5 rows - Compact)</option>
+                <option value={12}>12 per page (3 columns × 4 rows - Micro Stickers)</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Printable Paper Area */}
@@ -111,21 +301,285 @@ export default function SeatingPrintTemplates({
         style={{
           background: '#fff',
           width: '100%',
-          maxWidth: '1000px',
+          maxWidth: '1050px',
           padding: '40px',
           borderRadius: '8px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          boxShadow: '0 4px 25px rgba(0,0,0,0.18)',
           color: '#111827',
           fontFamily: 'inherit'
         }}
       >
         {/* ============================================================== */}
+        {/* SECTION: QUESTION PAPER PACKING SUMMARY (CLASS-WISE TO HALL)  */}
+        {/* ============================================================== */}
+        {(currentPrintType === 'all_in_one' || currentPrintType === 'qp_packing') && (
+          <div style={{ marginBottom: '40px', pageBreakAfter: currentPrintType === 'all_in_one' ? 'always' : 'auto' }}>
+            <div style={{ textAlign: 'center', borderBottom: '2.5px solid #0f172a', paddingBottom: '14px', marginBottom: '20px' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#475569' }}>
+                OFFICIAL EXAMINATION CELL &amp; CONFIDENTIAL PACKING DESK
+              </div>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 900, textTransform: 'uppercase', margin: '4px 0', color: '#0f172a' }}>
+                {examDetails.examName || 'EXAMINATION QUESTION PAPER PACKING SUMMARY'}
+              </h2>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1e40af' }}>
+                CLASS-WISE QUESTION PAPER DISTRIBUTION &amp; HALL PACKING ENVELOPE SHEET
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '0.85rem', marginTop: '8px', color: '#334155' }}>
+                <span><strong>Date:</strong> {examDetails.examDate || 'N/A'}</span>
+                <span><strong>Time/Session:</strong> {examDetails.examTime || 'N/A'}</span>
+                <span><strong>Total Candidates:</strong> {grandTotalStudents}</span>
+                <span><strong>Total Halls:</strong> {hallAllocations.length}</span>
+              </div>
+            </div>
+
+            {/* Instruction Callout for Exam Staff */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1.5px dashed #64748b',
+              borderRadius: '6px',
+              padding: '10px 14px',
+              marginBottom: '20px',
+              fontSize: '0.825rem',
+              color: '#334155',
+              lineHeight: 1.4
+            }}>
+              <strong>📌 Question Paper Packing Instructions:</strong> Pack question papers into sealed envelope bundles for each examination hall according to the exact class-wise counts listed below. Verify candidate roll numbers with the hall rosters before sealing.
+            </div>
+
+            {/* Table 1: Matrix - Halls (Rows) vs Classes (Columns) */}
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, margin: '14px 0 8px', color: '#0f172a', textTransform: 'uppercase', borderLeft: '4px solid #2563eb', paddingLeft: '8px' }}>
+              1. Hall-Wise Question Paper Packing Requirements (Packet Checklist)
+            </h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem', marginBottom: '24px' }}>
+              <thead>
+                <tr style={{ background: '#0f172a', color: '#fff' }}>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center', width: '45px' }}>Sl</th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'left', minWidth: '180px' }}>Examination Hall / Room</th>
+                  {allUniqueClasses.map(cls => (
+                    <th key={cls} style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center' }}>
+                      {cls}
+                    </th>
+                  ))}
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center', width: '90px', background: '#1e3a8a' }}>
+                    Total QP Required
+                  </th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center', width: '110px' }}>
+                    Packet Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {hallAllocations.map((hall, idx) => {
+                  const hData = hallClassCounts[hall.hallId] || { totalStudents: 0, classes: {} };
+                  return (
+                    <tr key={hall.hallId} style={{ background: idx % 2 === 1 ? '#f8fafc' : '#fff' }}>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontWeight: 600 }}>{idx + 1}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px', fontWeight: 700, color: '#0f172a' }}>
+                        {hall.hallName}
+                        <div style={{ fontSize: '0.72rem', fontWeight: 500, color: '#64748b' }}>
+                          Cap: {hall.totalBenches * (hall.studentsPerBench || 2)} Seats ({hall.totalBenches} benches)
+                        </div>
+                      </td>
+                      {allUniqueClasses.map(cls => {
+                        const count = hData.classes[cls] || 0;
+                        return (
+                          <td key={cls} style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontWeight: count > 0 ? 800 : 400, color: count > 0 ? '#0f172a' : '#94a3b8' }}>
+                            {count > 0 ? count : '-'}
+                          </td>
+                        );
+                      })}
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontWeight: 900, fontSize: '0.95rem', color: '#1e40af', background: '#eff6ff' }}>
+                        {hData.totalStudents}
+                      </td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
+                        [ &nbsp; ] Packed &amp; Sealed
+                      </td>
+                    </tr>
+                  );
+                })}
+                {/* Total Row */}
+                <tr style={{ background: '#f1f5f9', fontWeight: 800, borderTop: '2px solid #0f172a' }}>
+                  <td colSpan={2} style={{ border: '1px solid #cbd5e1', padding: '9px 12px', textAlign: 'right', textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                    Total Question Papers Required:
+                  </td>
+                  {allUniqueClasses.map(cls => (
+                    <td key={cls} style={{ border: '1px solid #cbd5e1', padding: '9px 8px', textAlign: 'center', fontSize: '0.9rem', color: '#0f172a' }}>
+                      {classHallCounts[cls]?.total || 0}
+                    </td>
+                  ))}
+                  <td style={{ border: '1px solid #cbd5e1', padding: '9px 8px', textAlign: 'center', fontSize: '1rem', color: '#1e40af', background: '#dbeafe' }}>
+                    {grandTotalStudents}
+                  </td>
+                  <td style={{ border: '1px solid #cbd5e1', padding: '9px 8px', textAlign: 'center', fontSize: '0.75rem', color: '#1e293b' }}>
+                    Ready for Exam
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Table 2: Class-Wise Breakdown to Halls (Quick Reference for Printing Office) */}
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 800, margin: '20px 0 8px', color: '#0f172a', textTransform: 'uppercase', borderLeft: '4px solid #16a34a', paddingLeft: '8px' }}>
+              2. Class-Wise Distribution across Examination Halls (Print Quantity Reference)
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+              {allUniqueClasses.map(cls => {
+                const cData = classHallCounts[cls];
+                return (
+                  <div key={cls} style={{ border: '1.5px solid #cbd5e1', borderRadius: '6px', padding: '10px 14px', background: '#fff' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #e2e8f0', paddingBottom: '6px', marginBottom: '8px' }}>
+                      <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>{cls}</span>
+                      <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 800, fontSize: '0.8rem' }}>
+                        Total QP: {cData.total}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.8rem' }}>
+                      {Object.entries(cData.halls).map(([hName, cnt]) => (
+                        <div key={hName} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                          <span style={{ color: '#475569' }}>{hName}:</span>
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>{cnt} copies</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Signatures */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', paddingTop: '16px', borderTop: '1px solid #cbd5e1', fontSize: '0.85rem' }}>
+              <div>QP Packing Officer: _______________________</div>
+              <div>Invigilator In-Charge: _______________________</div>
+              <div>Chief Superintendent: _______________________</div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SECTION: BENCH SEAT STICKERS / DESK SLIPS (STICK ON BENCH)    */}
+        {/* ============================================================== */}
+        {(currentPrintType === 'all_in_one' || currentPrintType === 'bench_slips') && (
+          <div style={{ marginBottom: '40px', pageBreakAfter: currentPrintType === 'all_in_one' ? 'always' : 'auto' }}>
+            {slipChunks.map((chunk, pageIdx) => {
+              const isLastPage = pageIdx === slipChunks.length - 1;
+              return (
+                <div
+                  key={pageIdx}
+                  style={{
+                    pageBreakAfter: isLastPage ? 'auto' : 'always',
+                    marginBottom: '40px'
+                  }}
+                >
+                  {/* Page Header (Slips) */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '2px dashed #94a3b8',
+                    paddingBottom: '8px',
+                    marginBottom: '16px',
+                    fontSize: '0.75rem',
+                    color: '#64748b'
+                  }}>
+                    <span><strong>BENCH SEAT NUMBER STICKERS</strong> • Cut along dashed borders &amp; stick on top/edge of student bench</span>
+                    <span>Page {pageIdx + 1} of {slipChunks.length} • {examDetails.examName || 'Examination'}</span>
+                  </div>
+
+                  {/* Stickers Grid */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: slipsPerPage === 12 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
+                    gap: '12px'
+                  }}>
+                    {chunk.map((slip, sIdx) => (
+                      <div
+                        key={sIdx}
+                        style={{
+                          border: '2px solid #1e293b',
+                          borderRadius: '8px',
+                          padding: '10px 12px',
+                          background: '#fff',
+                          position: 'relative',
+                          boxSizing: 'border-box',
+                          minHeight: '125px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        {/* Cut guide scissors indicator */}
+                        <div style={{ position: 'absolute', top: '-8px', right: '12px', fontSize: '0.65rem', color: '#94a3b8', background: '#fff', padding: '0 4px' }}>
+                          ✂ CUT &amp; STICK
+                        </div>
+
+                        {/* Slip Header */}
+                        <div style={{ borderBottom: '1.5px solid #0f172a', paddingBottom: '4px', marginBottom: '6px' }}>
+                          <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.5px' }}>
+                            {examDetails.examName ? examDetails.examName.substring(0, 38) : 'EXAMINATION SEATING'}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '2px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e40af' }}>
+                              {slip.hallName}
+                            </span>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b' }}>
+                              {examDetails.examDate || ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Primary High-Visibility Seat Info */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f1f5f9', padding: '6px 8px', borderRadius: '6px', margin: '4px 0' }}>
+                          <div>
+                            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>BENCH NUMBER</div>
+                            <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>
+                              BENCH #{slip.benchNumber}
+                            </div>
+                            <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b' }}>
+                              Side: {slip.seatPosition} (R{slip.rowNum}C{slip.colNum})
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#475569' }}>ROLL / SEAT NO</div>
+                            <div style={{
+                              fontSize: '1.25rem',
+                              fontWeight: 900,
+                              color: '#b91c1c',
+                              lineHeight: 1.1,
+                              background: '#fee2e2',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {slip.rollNo}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Candidate Name & Class Footer */}
+                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem' }}>
+                          <div style={{ fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
+                            {slip.name}
+                          </div>
+                          <div style={{ fontWeight: 700, color: '#0369a1', textTransform: 'uppercase' }}>
+                            {slip.className}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ============================================================== */}
         {/* TEMPLATE 1: VISUAL HALL SEATING PLAN (BENCH MAP)               */}
         {/* ============================================================== */}
-        {activePrintType === 'hall_plan' && (
+        {(currentPrintType === 'all_in_one' || currentPrintType === 'hall_plan') && (
           <div>
             {hallAllocations.map((hall, hIdx) => (
-              <div key={hall.hallId} style={{ pageBreakAfter: hIdx < hallAllocations.length - 1 ? 'always' : 'auto', marginBottom: '40px' }}>
+              <div key={hall.hallId} style={{ pageBreakAfter: (hIdx < hallAllocations.length - 1 || currentPrintType === 'all_in_one') ? 'always' : 'auto', marginBottom: '40px' }}>
                 {/* Header */}
                 <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '14px', marginBottom: '20px' }}>
                   <h2 style={{ fontSize: '1.4rem', fontWeight: 800, textTransform: 'uppercase', margin: 0 }}>
@@ -244,7 +698,7 @@ export default function SeatingPrintTemplates({
         {/* ============================================================== */}
         {/* TEMPLATE 2: HALL-WISE DETAILED ROSTER / ATTENDANCE SHEET       */}
         {/* ============================================================== */}
-        {activePrintType === 'hall_roster' && (
+        {(currentPrintType === 'all_in_one' || currentPrintType === 'hall_roster') && (
           <div>
             {hallAllocations.map((hall, hIdx) => {
               const studentsInHall = [];
@@ -261,7 +715,7 @@ export default function SeatingPrintTemplates({
               });
 
               return (
-                <div key={hall.hallId} style={{ pageBreakAfter: hIdx < hallAllocations.length - 1 ? 'always' : 'auto', marginBottom: '40px' }}>
+                <div key={hall.hallId} style={{ pageBreakAfter: (hIdx < hallAllocations.length - 1 || currentPrintType === 'all_in_one') ? 'always' : 'auto', marginBottom: '40px' }}>
                   <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '12px', marginBottom: '16px' }}>
                     <h2 style={{ fontSize: '1.35rem', fontWeight: 800, textTransform: 'uppercase', margin: 0 }}>
                       {examDetails.examName || 'EXAMINATION SEATING & ATTENDANCE ROSTER'}
@@ -328,7 +782,7 @@ export default function SeatingPrintTemplates({
         {/* ============================================================== */}
         {/* TEMPLATE 3: NOTICE BOARD ANNOUNCEMENT LIST (CLASS-WISE)        */}
         {/* ============================================================== */}
-        {activePrintType === 'student_notice' && (
+        {(currentPrintType === 'all_in_one' || currentPrintType === 'student_notice') && (
           <div>
             <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '14px', marginBottom: '24px' }}>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, textTransform: 'uppercase', margin: 0 }}>
@@ -419,7 +873,7 @@ export default function SeatingPrintTemplates({
             top: 0;
             width: 100% !important;
             max-width: 100% !important;
-            padding: 20px !important;
+            padding: 15px !important;
             box-shadow: none !important;
           }
           .no-print {

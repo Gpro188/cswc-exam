@@ -13,7 +13,9 @@ import {
   ArrowRightLeft,
   X,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Package,
+  Tag
 } from 'lucide-react';
 import { checkBenchRuleViolations } from '../utils/seatingArrangementEngine';
 
@@ -258,25 +260,49 @@ export default function SeatingArrangementView({
         {/* Print Buttons */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
+            onClick={() => onOpenPrint('all_in_one')}
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 800, background: '#2563eb' }}
+            title="Print entire complete seating suite: Packing lists, Bench stickers, Hall layouts & rosters"
+          >
+            <Printer size={16} /> Print Full Seating Data
+          </button>
+          <button
+            onClick={() => onOpenPrint('qp_packing')}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600, background: '#fef3c7', color: '#92400e', borderColor: '#fde68a' }}
+            title="Question Paper packing counts per hall and class"
+          >
+            <Package size={16} /> QP Packing Summary
+          </button>
+          <button
+            onClick={() => onOpenPrint('bench_slips')}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600, background: '#f0fdf4', color: '#166534', borderColor: '#bbf7d0' }}
+            title="Bench slips / stickers to stick on student benches"
+          >
+            <Tag size={16} /> Bench Seat Slips
+          </button>
+          <button
             onClick={() => onOpenPrint('hall_plan')}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600 }}
           >
-            <Printer size={16} /> Print Seating Plan (Map)
+            <Printer size={16} /> Hall Plan (Map)
           </button>
           <button
             onClick={() => onOpenPrint('hall_roster')}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600 }}
           >
-            <FileText size={16} /> Print Seating List (Roster)
+            <FileText size={16} /> Hall Roster
           </button>
           <button
             onClick={() => onOpenPrint('student_notice')}
-            className="btn btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 700 }}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600 }}
           >
-            <Printer size={16} /> Print Student Announcement List
+            <Users size={16} /> Student Notice
           </button>
         </div>
       </div>
