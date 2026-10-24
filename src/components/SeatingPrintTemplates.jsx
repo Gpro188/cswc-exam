@@ -11,7 +11,8 @@ import {
   Tag, 
   FileText, 
   Layers, 
-  Users 
+  Users,
+  FileSpreadsheet 
 } from 'lucide-react';
 
 export default function SeatingPrintTemplates({
@@ -118,6 +119,11 @@ export default function SeatingPrintTemplates({
     slipChunks.push(filteredSlips.slice(i, i + chunkSize));
   }
 
+  // 4. Master Consolidated Full Student List (All seated students sorted by Roll Number)
+  const allSeatedStudentsSorted = [...allSeatSlips].sort((a, b) => 
+    a.rollNo.localeCompare(b.rollNo, undefined, { numeric: true })
+  );
+
   const allUniqueClasses = Object.keys(classHallCounts).sort();
 
   return (
@@ -218,7 +224,8 @@ export default function SeatingPrintTemplates({
             { id: 'bench_slips', label: '🏷️ Bench Seat Slips (Stickers to Stick on Desks)', icon: Tag },
             { id: 'hall_plan', label: '🗺️ Visual Hall Plan (Bench Map)', icon: FileText },
             { id: 'hall_roster', label: '📋 Hall Attendance Roster', icon: Users },
-            { id: 'student_notice', label: '📢 Notice Board Announcement', icon: School }
+            { id: 'student_notice', label: '📢 Notice Board Announcement', icon: School },
+            { id: 'total_list', label: '📑 Total Seated Students List (All Classes)', icon: FileSpreadsheet, highlight: true }
           ].map(tab => {
             const IconComp = tab.icon;
             const isActive = currentPrintType === tab.id;
@@ -767,6 +774,17 @@ export default function SeatingPrintTemplates({
                         ))
                       )}
                     </tbody>
+                    {/* Total Row */}
+                    <tfoot>
+                      <tr style={{ background: '#f1f5f9', fontWeight: 800, borderTop: '2px solid #000' }}>
+                        <td colSpan={6} style={{ border: '1px solid #cbd5e1', padding: '8px 12px', textAlign: 'right', textTransform: 'uppercase', fontSize: '0.825rem' }}>
+                          Total Candidates in {hall.hallName}:
+                        </td>
+                        <td style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontWeight: 900, color: '#1e40af', fontSize: '0.9rem' }}>
+                          {studentsInHall.length}
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', paddingTop: '16px', fontSize: '0.85rem' }}>
@@ -847,13 +865,137 @@ export default function SeatingPrintTemplates({
                         </tr>
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#f1f5f9', fontWeight: 800, borderTop: '2px solid #000' }}>
+                        <td colSpan={5} style={{ border: '1px solid #cbd5e1', padding: '8px 12px', textAlign: 'right', textTransform: 'uppercase', fontSize: '0.825rem' }}>
+                          Total {className} Candidates:
+                        </td>
+                        <td style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontWeight: 900, color: '#1e40af', fontSize: '0.9rem' }}>
+                          {students.length}
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               ))
             )}
 
+            {/* Total Summary Footer across All Classes */}
+            {Object.keys(studentsByClass).length > 0 && (
+              <div style={{
+                marginTop: '16px',
+                marginBottom: '20px',
+                padding: '12px 18px',
+                background: '#f8fafc',
+                border: '2px solid #0f172a',
+                borderRadius: '6px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                pageBreakInside: 'avoid'
+              }}>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>
+                  Total Seated Candidates Across All Classes:
+                </div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#1e40af' }}>
+                  {grandTotalStudents} Students ({allUniqueClasses.length} Classes)
+                </div>
+              </div>
+            )}
+
             <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.8rem', color: '#64748b', borderTop: '1px solid #cbd5e1', paddingTop: '10px' }}>
               * Students are requested to occupy their assigned hall and bench at least 15 minutes prior to commencement of examination.
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TEMPLATE 4: CONSOLIDATED MASTER TOTAL CANDIDATES LIST          */}
+        {/* ============================================================== */}
+        {(currentPrintType === 'all_in_one' || currentPrintType === 'total_list') && (
+          <div style={{ pageBreakBefore: currentPrintType === 'all_in_one' ? 'always' : 'auto' }}>
+            <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '14px', marginBottom: '24px' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#475569' }}>
+                OFFICIAL SEATING EXAMINATION DESK
+              </div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 900, textTransform: 'uppercase', margin: '4px 0', color: '#0f172a' }}>
+                {examDetails.examName || 'EXAMINATION SEATING ARRANGEMENT'}
+              </h2>
+              <h3 style={{ fontSize: '1.05rem', margin: '4px 0 0', fontWeight: 700, color: '#1e40af' }}>
+                COMPLETE MASTER SEATING LIST (TOTAL REGISTERED CANDIDATES)
+              </h3>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', fontSize: '0.85rem', marginTop: '6px', color: '#475569' }}>
+                <span><strong>Date:</strong> {examDetails.examDate || 'N/A'}</span>
+                <span><strong>Time/Session:</strong> {examDetails.examTime || 'N/A'}</span>
+                <span><strong>Total Candidates:</strong> {grandTotalStudents}</span>
+                <span><strong>Total Halls:</strong> {hallAllocations.length}</span>
+              </div>
+            </div>
+
+            {/* Class Breakdown Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+              {allUniqueClasses.map(cls => (
+                <div key={cls} style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px 12px', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.825rem', color: '#334155' }}>{cls}</span>
+                  <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e40af' }}>{classHallCounts[cls]?.total || 0}</span>
+                </div>
+              ))}
+              <div style={{ border: '1.5px solid #1e40af', borderRadius: '6px', padding: '8px 12px', background: '#eff6ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1e40af' }}>GRAND TOTAL</span>
+                <span style={{ fontWeight: 900, fontSize: '1.05rem', color: '#1e40af' }}>{grandTotalStudents}</span>
+              </div>
+            </div>
+
+            {/* Master Table of All Seated Students */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', marginBottom: '24px' }}>
+              <thead>
+                <tr style={{ background: '#0f172a', color: '#fff' }}>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center', width: '45px' }}>Sl</th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'left', width: '130px' }}>Roll / ID No</th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'left' }}>Candidate Name</th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'left', width: '140px' }}>Class / Batch</th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center', width: '150px' }}>Assigned Hall</th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center', width: '100px' }}>Bench No</th>
+                  <th style={{ border: '1px solid #334155', padding: '8px', textAlign: 'center', width: '90px' }}>Side</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allSeatedStudentsSorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                      No students found in arrangement.
+                    </td>
+                  </tr>
+                ) : (
+                  allSeatedStudentsSorted.map((std, idx) => (
+                    <tr key={idx} style={{ background: idx % 2 === 1 ? '#f8fafc' : '#fff', borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', textAlign: 'center', fontWeight: 600 }}>{idx + 1}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', fontWeight: 800, color: '#b91c1c' }}>{std.rollNo}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', fontWeight: 600, color: '#0f172a' }}>{std.name}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', fontWeight: 600, color: '#0369a1' }}>{std.className}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', textAlign: 'center', fontWeight: 700 }}>{std.hallName}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', textAlign: 'center', fontWeight: 700 }}>Bench #{std.benchNumber}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', textAlign: 'center', color: '#64748b' }}>{std.seatPosition}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#f1f5f9', fontWeight: 800, borderTop: '2px solid #0f172a' }}>
+                  <td colSpan={4} style={{ border: '1px solid #cbd5e1', padding: '10px 12px', textAlign: 'right', textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                    Grand Total Seated Candidates:
+                  </td>
+                  <td colSpan={3} style={{ border: '1px solid #cbd5e1', padding: '10px 12px', textAlign: 'center', fontSize: '1rem', color: '#1e40af', background: '#dbeafe' }}>
+                    {grandTotalStudents} Candidates across {hallAllocations.length} Halls
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', paddingTop: '16px', borderTop: '1px solid #cbd5e1', fontSize: '0.85rem' }}>
+              <div>Prepared By: _______________________</div>
+              <div>Verified By: _______________________</div>
+              <div>Chief Superintendent: _______________________</div>
             </div>
           </div>
         )}

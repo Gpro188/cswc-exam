@@ -304,6 +304,14 @@ export default function SeatingArrangementView({
           >
             <Users size={16} /> Student Notice
           </button>
+          <button
+            onClick={() => onOpenPrint('total_list')}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 700, background: '#f8fafc', borderColor: '#94a3b8' }}
+            title="Consolidated master total student list across all classes"
+          >
+            <FileText size={16} /> Total Students List
+          </button>
         </div>
       </div>
 
